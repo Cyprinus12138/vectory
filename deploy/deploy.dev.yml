@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: dev
+  name: example-deployment
+  labels:
+    app: example
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: example
+  template:
+    metadata:
+      namespace: dev
+      labels:
+        app: example
+    spec:
+      imagePullSecrets:
+        - name: registry-credential
+      containers:
+        - name: example
+          image: dev.registry.cyprinus.sg.cyprinus.tech/example:dev
+          imagePullPolicy: "Always"
+          env:
+            - name: PORT
+              value: "6060"
+            - name: RPC_PORT
+              value: "8999"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: DEPLOY_DATE
+              value: "deploy@"
+          ports:
+            - containerPort: 6060 # should be identical with env settings.

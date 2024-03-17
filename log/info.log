@@ -1,0 +1,324 @@
+2023-06-17T11:51:31.451+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T11:51:31.504+0800	INFO	setting up the service	{"instanceId": "example-1686973891504377645-0125076284930597112"}
+2023-06-17T11:51:31.505+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T11:51:31.506+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T11:51:31.506+0800	INFO	starting the server
+2023-06-17T11:51:31.506+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686973891504377645-0125076284930597112"}
+2023-06-17T11:51:31.506+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T11:51:31.507+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T11:51:54.774+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T11:51:54.774+0800	INFO	unregistering rpc
+2023-06-17T11:51:54.786+0800	INFO	stopping rpc
+2023-06-17T11:51:54.786+0800	INFO	stopping http server
+2023-06-17T11:51:54.786+0800	INFO	stopping server
+2023-06-17T12:01:13.902+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:01:13.931+0800	INFO	setting up the service	{"instanceId": "example-1686974473931501507-5637271181821281396"}
+2023-06-17T12:01:13.932+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:01:13.933+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:01:13.933+0800	INFO	starting the server
+2023-06-17T12:01:13.933+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686974473931501507-5637271181821281396"}
+2023-06-17T12:01:13.933+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:01:13.933+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:03:34.196+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:03:34.196+0800	INFO	unregistering rpc
+2023-06-17T12:03:34.209+0800	INFO	stopping rpc
+2023-06-17T12:03:34.209+0800	INFO	stopping http server
+2023-06-17T12:03:34.209+0800	INFO	stopping server
+2023-06-17T12:03:34.890+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:03:34.923+0800	INFO	setting up the service	{"instanceId": "example-1686974614923270190-2833208739018885997"}
+2023-06-17T12:03:34.925+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:03:34.925+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:03:34.929+0800	INFO	starting the server
+2023-06-17T12:03:34.929+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686974614923270190-2833208739018885997"}
+2023-06-17T12:03:34.929+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:03:34.929+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:03:54.944+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:03:54.944+0800	INFO	unregistering rpc
+2023-06-17T12:03:54.953+0800	INFO	stopping rpc
+2023-06-17T12:03:54.953+0800	INFO	stopping http server
+2023-06-17T12:03:54.953+0800	INFO	stopping server
+2023-06-17T12:03:55.620+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:03:55.657+0800	INFO	setting up the service	{"instanceId": "example-1686974635657935296-2854087377729697537"}
+2023-06-17T12:03:55.659+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:03:55.660+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:03:55.660+0800	INFO	starting the server
+2023-06-17T12:03:55.660+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686974635657935296-2854087377729697537"}
+2023-06-17T12:03:55.660+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:03:55.670+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:05:39.599+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:05:39.599+0800	INFO	unregistering rpc
+2023-06-17T12:05:39.615+0800	INFO	stopping rpc
+2023-06-17T12:05:39.615+0800	INFO	stopping http server
+2023-06-17T12:05:39.615+0800	INFO	stopping server
+2023-06-17T12:06:36.238+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:06:36.267+0800	INFO	setting up the service	{"instanceId": "example-1686974796267914401-4120855804510162567"}
+2023-06-17T12:06:36.269+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:06:36.270+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:06:36.272+0800	INFO	starting the server
+2023-06-17T12:06:36.272+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686974796267914401-4120855804510162567"}
+2023-06-17T12:06:36.272+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:06:36.277+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:07:17.723+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:07:17.723+0800	INFO	unregistering rpc
+2023-06-17T12:07:17.735+0800	INFO	stopping rpc
+2023-06-17T12:07:17.735+0800	INFO	stopping http server
+2023-06-17T12:07:17.735+0800	INFO	stopping server
+2023-06-17T12:07:19.692+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:07:19.746+0800	INFO	setting up the service	{"instanceId": "example-1686974839746270265-2175979427458697335"}
+2023-06-17T12:07:19.748+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:07:19.749+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:07:19.749+0800	INFO	starting the server
+2023-06-17T12:07:19.749+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686974839746270265-2175979427458697335"}
+2023-06-17T12:07:19.749+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:07:19.749+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:07:34.203+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:07:34.204+0800	INFO	unregistering rpc
+2023-06-17T12:07:34.216+0800	INFO	stopping rpc
+2023-06-17T12:07:34.216+0800	INFO	stopping http server
+2023-06-17T12:07:34.216+0800	INFO	stopping server
+2023-06-17T12:07:53.264+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:07:56.572+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:07:56.601+0800	INFO	setting up the service	{"instanceId": "example-1686974876601679027-6376651181535753965"}
+2023-06-17T12:07:56.602+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:07:56.602+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:07:56.603+0800	INFO	starting the server
+2023-06-17T12:07:56.603+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686974876601679027-6376651181535753965"}
+2023-06-17T12:07:56.603+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:07:56.603+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:08:13.092+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:08:13.092+0800	INFO	unregistering rpc
+2023-06-17T12:08:13.104+0800	INFO	stopping rpc
+2023-06-17T12:08:13.104+0800	INFO	stopping http server
+2023-06-17T12:08:13.104+0800	INFO	stopping server
+2023-06-17T12:08:24.412+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:08:24.444+0800	INFO	setting up the service	{"instanceId": "example-1686974904444754927-8396417281570381948"}
+2023-06-17T12:08:24.446+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:08:24.446+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:08:24.446+0800	INFO	starting the server
+2023-06-17T12:08:24.446+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686974904444754927-8396417281570381948"}
+2023-06-17T12:08:24.446+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:08:24.446+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:08:29.145+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:08:29.145+0800	INFO	unregistering rpc
+2023-06-17T12:08:29.159+0800	INFO	stopping rpc
+2023-06-17T12:08:29.160+0800	INFO	stopping http server
+2023-06-17T12:08:29.160+0800	INFO	stopping server
+2023-06-17T12:09:10.240+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:14:50.764+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:14:50.792+0800	INFO	setting up the service	{"instanceId": "example-1686975290792764329-0026970931138568192"}
+2023-06-17T12:14:50.793+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:14:50.795+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:14:50.795+0800	INFO	starting the server
+2023-06-17T12:14:50.795+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686975290792764329-0026970931138568192"}
+2023-06-17T12:14:50.795+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:14:50.795+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:15:14.568+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:15:14.568+0800	INFO	unregistering rpc
+2023-06-17T12:15:14.577+0800	INFO	stopping rpc
+2023-06-17T12:15:14.577+0800	INFO	stopping http server
+2023-06-17T12:15:14.577+0800	INFO	stopping server
+2023-06-17T12:15:37.527+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:15:37.562+0800	INFO	setting up the service	{"instanceId": "example-1686975337562685753-8481037327980842017"}
+2023-06-17T12:15:37.571+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:15:37.577+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:15:37.577+0800	INFO	starting the server
+2023-06-17T12:15:37.578+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686975337562685753-8481037327980842017"}
+2023-06-17T12:15:37.578+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:15:37.578+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:15:43.642+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:15:43.643+0800	INFO	unregistering rpc
+2023-06-17T12:15:43.654+0800	INFO	stopping rpc
+2023-06-17T12:15:43.654+0800	INFO	stopping http server
+2023-06-17T12:15:43.654+0800	INFO	stopping server
+2023-06-17T12:16:11.414+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:16:26.230+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:16:26.264+0800	INFO	setting up the service	{"instanceId": "example-1686975386264661482-2133823466437001798"}
+2023-06-17T12:16:26.269+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:16:26.275+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:16:26.276+0800	INFO	starting the server
+2023-06-17T12:16:26.276+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686975386264661482-2133823466437001798"}
+2023-06-17T12:16:26.276+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:16:26.276+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:16:57.641+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:16:57.641+0800	INFO	unregistering rpc
+2023-06-17T12:16:57.653+0800	INFO	stopping rpc
+2023-06-17T12:16:57.653+0800	INFO	stopping http server
+2023-06-17T12:16:57.653+0800	INFO	stopping server
+2023-06-17T12:19:59.551+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:33:02.623+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T12:33:02.675+0800	INFO	setting up the service	{"instanceId": "example-1686976382675896872-1436841210508280535"}
+2023-06-17T12:33:02.676+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T12:33:02.677+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T12:33:02.677+0800	INFO	starting the server
+2023-06-17T12:33:02.677+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1686976382675896872-1436841210508280535"}
+2023-06-17T12:33:02.677+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T12:33:02.677+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T12:34:21.881+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T12:34:21.881+0800	INFO	unregistering rpc
+2023-06-17T12:34:21.894+0800	INFO	stopping rpc
+2023-06-17T12:34:21.894+0800	INFO	stopping http server
+2023-06-17T12:34:21.894+0800	INFO	stopping server
+2023-06-17T22:05:40.124+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T22:05:40.152+0800	INFO	setting up the service	{"instanceId": "example-1687010740152023394-1407407589507755694"}
+2023-06-17T22:05:40.153+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T22:05:40.153+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T22:05:40.154+0800	INFO	starting the server
+2023-06-17T22:05:40.154+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687010740152023394-1407407589507755694"}
+2023-06-17T22:05:40.154+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T22:05:40.155+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T22:06:10.464+0800	INFO	failed
+2023-06-17T22:06:15.799+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T22:06:15.799+0800	INFO	unregistering rpc
+2023-06-17T22:06:15.812+0800	INFO	stopping rpc
+2023-06-17T22:06:15.812+0800	INFO	stopping http server
+2023-06-17T22:06:15.812+0800	INFO	stopping server
+2023-06-17T22:06:16.526+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T22:06:16.558+0800	INFO	setting up the service	{"instanceId": "example-1687010776558950410-7664328789184981457"}
+2023-06-17T22:06:16.559+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T22:06:16.559+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T22:06:16.559+0800	INFO	starting the server
+2023-06-17T22:06:16.559+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687010776558950410-7664328789184981457"}
+2023-06-17T22:06:16.559+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T22:06:16.560+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T22:07:09.597+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T22:07:09.597+0800	INFO	unregistering rpc
+2023-06-17T22:07:09.612+0800	INFO	stopping rpc
+2023-06-17T22:07:09.614+0800	INFO	stopping http server
+2023-06-17T22:07:09.614+0800	INFO	stopping server
+2023-06-17T22:11:45.293+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T22:14:01.412+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T22:14:01.449+0800	INFO	setting up the service	{"instanceId": "example-1687011241449115164-0099845131005987519"}
+2023-06-17T22:14:01.450+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T22:14:01.451+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T22:14:01.453+0800	INFO	starting the server
+2023-06-17T22:14:01.454+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687011241449115164-0099845131005987519"}
+2023-06-17T22:14:01.454+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T22:14:01.454+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T22:14:13.638+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T22:14:13.639+0800	INFO	unregistering rpc
+2023-06-17T22:14:13.653+0800	INFO	stopping rpc
+2023-06-17T22:14:13.653+0800	INFO	stopping http server
+2023-06-17T22:14:13.653+0800	INFO	stopping server
+2023-06-17T22:14:16.454+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T22:14:16.485+0800	INFO	setting up the service	{"instanceId": "example-1687011256485406504-2165144512864800947"}
+2023-06-17T22:14:16.485+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T22:14:16.486+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T22:14:16.486+0800	INFO	starting the server
+2023-06-17T22:14:16.486+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687011256485406504-2165144512864800947"}
+2023-06-17T22:14:16.486+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T22:14:16.486+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T22:14:24.399+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T22:14:24.400+0800	INFO	unregistering rpc
+2023-06-17T22:14:24.414+0800	INFO	stopping rpc
+2023-06-17T22:14:24.414+0800	INFO	stopping http server
+2023-06-17T22:14:24.414+0800	INFO	stopping server
+2023-06-17T22:14:58.326+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T22:14:58.365+0800	INFO	setting up the service	{"instanceId": "example-1687011298365083552-1933917020387847868"}
+2023-06-17T22:14:58.367+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T22:14:58.369+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T22:14:58.369+0800	INFO	starting the server
+2023-06-17T22:14:58.372+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687011298365083552-1933917020387847868"}
+2023-06-17T22:14:58.372+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T22:14:58.373+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-17T22:15:22.789+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-17T22:15:22.789+0800	INFO	unregistering rpc
+2023-06-17T22:15:22.801+0800	INFO	stopping rpc
+2023-06-17T22:15:22.801+0800	INFO	stopping http server
+2023-06-17T22:15:22.801+0800	INFO	stopping server
+2023-06-17T22:16:36.810+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T22:16:58.346+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-17T22:16:58.378+0800	INFO	setting up the service	{"instanceId": "example-1687011418378083793-4000676075900034769"}
+2023-06-17T22:16:58.381+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-17T22:16:58.382+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-17T22:16:58.382+0800	INFO	starting the server
+2023-06-17T22:16:58.383+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687011418378083793-4000676075900034769"}
+2023-06-17T22:16:58.383+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-17T22:16:58.387+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-18T00:01:48.022+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-18T00:01:48.022+0800	INFO	unregistering rpc
+2023-06-18T00:01:48.034+0800	INFO	stopping rpc
+2023-06-18T00:01:48.034+0800	INFO	stopping http server
+2023-06-18T00:01:48.034+0800	INFO	stopping server
+2023-06-18T00:01:50.238+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-18T00:01:50.276+0800	INFO	setting up the service	{"instanceId": "example-1687017710276626341-5825699566845322586"}
+2023-06-18T00:01:50.277+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-18T00:01:50.277+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-18T00:01:50.277+0800	INFO	starting the server
+2023-06-18T00:01:50.277+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687017710276626341-5825699566845322586"}
+2023-06-18T00:01:50.277+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-18T00:01:50.278+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-18T00:49:40.434+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-18T00:49:40.434+0800	INFO	unregistering rpc
+2023-06-18T00:49:40.450+0800	INFO	stopping rpc
+2023-06-18T00:49:40.450+0800	INFO	stopping http server
+2023-06-18T00:49:40.450+0800	INFO	stopping server
+2023-06-18T00:49:54.619+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-18T00:49:54.652+0800	INFO	setting up the service	{"instanceId": "example-1687020594652808931-3382958882737573620"}
+2023-06-18T00:49:54.655+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-18T00:49:54.655+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-18T00:49:54.656+0800	INFO	starting the server
+2023-06-18T00:49:54.656+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687020594652808931-3382958882737573620"}
+2023-06-18T00:49:54.656+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-18T00:49:54.656+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-18T00:50:24.420+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-18T00:50:24.420+0800	INFO	unregistering rpc
+2023-06-18T00:50:24.438+0800	INFO	stopping rpc
+2023-06-18T00:50:24.438+0800	INFO	stopping http server
+2023-06-18T00:50:24.438+0800	INFO	stopping server
+2023-06-18T00:50:26.058+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-18T00:50:26.094+0800	INFO	setting up the service	{"instanceId": "example-1687020626094354532-4667046433979567688"}
+2023-06-18T00:50:26.094+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-18T00:50:26.096+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-18T00:50:26.096+0800	INFO	starting the server
+2023-06-18T00:50:26.096+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687020626094354532-4667046433979567688"}
+2023-06-18T00:50:26.096+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-18T00:50:26.096+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-18T00:52:53.223+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-18T00:52:53.224+0800	INFO	unregistering rpc
+2023-06-18T00:52:53.238+0800	INFO	stopping rpc
+2023-06-18T00:52:53.238+0800	INFO	stopping http server
+2023-06-18T00:52:53.238+0800	INFO	stopping server
+2023-06-18T00:59:57.020+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-18T00:59:57.060+0800	INFO	setting up the service	{"instanceId": "example-1687021197059574962-8752526061526990257"}
+2023-06-18T00:59:57.060+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-18T00:59:57.060+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-18T00:59:57.064+0800	INFO	starting the server
+2023-06-18T00:59:57.064+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687021197059574962-8752526061526990257"}
+2023-06-18T00:59:57.064+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-18T00:59:57.064+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-18T01:00:07.520+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-18T01:00:07.520+0800	INFO	unregistering rpc
+2023-06-18T01:00:07.528+0800	INFO	stopping rpc
+2023-06-18T01:00:07.528+0800	INFO	stopping http server
+2023-06-18T01:00:07.529+0800	INFO	stopping server
+2023-06-21T23:59:58.495+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-21T23:59:58.529+0800	INFO	setting up the service	{"instanceId": "example-1687363198529252306-5620482124613624920"}
+2023-06-21T23:59:58.530+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-21T23:59:58.531+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-21T23:59:58.531+0800	INFO	starting the server
+2023-06-21T23:59:58.532+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687363198529252306-5620482124613624920"}
+2023-06-21T23:59:58.532+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-21T23:59:58.532+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-22T00:00:04.991+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-22T00:00:04.991+0800	INFO	unregistering rpc
+2023-06-22T00:00:05.006+0800	INFO	stopping rpc
+2023-06-22T00:00:05.006+0800	INFO	stopping http server
+2023-06-22T00:00:05.006+0800	INFO	stopping server
+2023-06-23T18:11:37.828+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-23T18:11:37.867+0800	INFO	setting up the service	{"instanceId": "example-1687515097867571291-3426209749075115291"}
+2023-06-23T18:11:37.868+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-23T18:11:37.869+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-23T18:11:37.869+0800	INFO	starting the server
+2023-06-24T00:37:51.623+0800	INFO	logger init successfully	{"config": {"level":"debug","default_path":"./log/data.log","level_path":{"debug":"./log/data.log","error":"./log/error.log","fatal":"./log/fatal.log","info":"./log/info.log","warn":"./log/warn.log"},"log_kafka_enabled":null}}
+2023-06-24T00:37:51.659+0800	INFO	setting up the service	{"instanceId": "example-1687538271659647861-4181424952396543210"}
+2023-06-24T00:37:51.660+0800	INFO	etcd enabled	{"setting": {"enabled":true,"etcd_endpoints":["http://192.168.100.108:30001","http://192.168.100.108:30002","http://192.168.100.108:30003"],"ttl":5}}
+2023-06-24T00:37:51.660+0800	INFO	register rpc service impl	{"service": "[say_hello]"}
+2023-06-24T00:37:51.662+0800	INFO	starting the server
+2023-06-24T00:37:51.662+0800	INFO	register the rpc service	{"serviceName": "example", "instanceId": "example-1687538271659647861-4181424952396543210"}
+2023-06-24T00:37:51.662+0800	INFO	rpc server start listening	{"addr": "127.0.0.1:8999"}
+2023-06-24T00:37:51.662+0800	INFO	http server start listening	{"addr": "127.0.0.1:6060"}
+2023-06-24T00:37:55.157+0800	INFO	signal received, graceful stopping	{"signal": "interrupt"}
+2023-06-24T00:37:55.158+0800	INFO	unregistering rpc
+2023-06-24T00:37:55.173+0800	INFO	stopping rpc
+2023-06-24T00:37:55.173+0800	INFO	stopping http server
+2023-06-24T00:37:55.173+0800	INFO	stopping server
