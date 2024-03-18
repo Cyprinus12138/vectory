@@ -6,10 +6,11 @@ config_manager:
       path: "/example"
 
 service:
-  service_name: "example"
+  cluster_name: "example"
   grpc_enabled: true
   cluster_mode:
     enabled: true
+    grace_period: 15
     endpoints:
       - "http://192.168.100.108:30001"
       - "http://192.168.100.108:30002"

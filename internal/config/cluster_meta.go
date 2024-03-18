@@ -2,7 +2,7 @@ package config
 
 import "github.com/Cyprinus12138/vectory/internal/utils/config_manager"
 
-type ServiceMetaConfig struct {
+type ClusterMetaConfig struct {
 	ClusterName string             `json:"cluster_name" yaml:"cluster_name"`
 	GrpcEnabled bool               `json:"grpc_enabled" yaml:"grpc_enabled"`
 	Admin       ServiceAdminConfig `json:"admin" yaml:"admin"`
@@ -10,9 +10,10 @@ type ServiceMetaConfig struct {
 }
 
 type ClusterSetting struct {
-	Enabled   bool     `json:"enabled" yaml:"enabled"`
-	Endpoints []string `json:"endpoints" yaml:"etcd_endpoints"`
-	Ttl       int64    `json:"ttl" yaml:"ttl"`
+	Enabled     bool     `json:"enabled" yaml:"enabled"`
+	GracePeriod int      `json:"grace_period" yaml:"grace_period"`
+	Endpoints   []string `json:"endpoints" yaml:"etcd_endpoints"`
+	Ttl         int64    `json:"ttl" yaml:"ttl"`
 }
 
 type ServiceAdminConfig struct {
@@ -21,9 +22,9 @@ type ServiceAdminConfig struct {
 	HealthCheckEndpoint string `json:"health_check_endpoint" yaml:"health_check_endpoint"`
 }
 
-func GetServiceMetaConfig() *ServiceMetaConfig {
-	v := config_manager.Get(ConfKeyServiceMeta)
-	if conf, ok := v.(*ServiceMetaConfig); ok {
+func GetClusterMetaConfig() *ClusterMetaConfig {
+	v := config_manager.Get(ConfKeyClusterMeta)
+	if conf, ok := v.(*ClusterMetaConfig); ok {
 		return conf
 	}
 	return nil

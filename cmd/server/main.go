@@ -19,9 +19,9 @@ var server app.App
 func init() {
 	err := config_manager.Init("./etc/service.yml", []viper.RegisteredConfig{
 		{
-			Key:      config.ConfKeyServiceMeta,
+			Key:      config.ConfKeyClusterMeta,
 			CanBeNil: false,
-			Schema:   &config.ServiceMetaConfig{},
+			Schema:   &config.ClusterMetaConfig{},
 		},
 		{
 			Key:      config.ConfKeyLogger,

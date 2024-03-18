@@ -1,7 +1,7 @@
 package config
 
 const (
-	ConfKeyServiceMeta = "service"
+	ConfKeyClusterMeta = "cluster"
 	ConfKeyEnv         = "env"
 	ConfKeyLogger      = "logger"
 )

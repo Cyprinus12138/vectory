@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Cyprinus12138/vectory/internal/cluster"
 	"github.com/Cyprinus12138/vectory/internal/config"
-	"github.com/Cyprinus12138/vectory/internal/grpc_client"
 	"github.com/Cyprinus12138/vectory/internal/grpc_handler"
 	"github.com/Cyprinus12138/vectory/internal/http_handler"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
@@ -28,13 +28,11 @@ type App struct {
 	router          *gin.Engine
 	addr            string
 	gRpcService     *grpc.Server
-	conf            *config.ServiceMetaConfig
+	conf            *config.ClusterMetaConfig
 	sigChan         chan os.Signal
 	etcd            *etcd.Client
 	endpointManager endpoints.Manager
 }
-
-const defaultRegisterTimeoutMs = 5000
 
 func (a *App) Setup(ctx context.Context) (err error) {
 
@@ -44,7 +42,7 @@ func (a *App) Setup(ctx context.Context) (err error) {
 	logger.Info("setting up the service", logger.String("instanceId", a.id))
 
 	a.sigChan = make(chan os.Signal, 1)
-	a.conf = config.GetServiceMetaConfig()
+	a.conf = config.GetClusterMetaConfig()
 	if a.conf == nil {
 		logger.Fatal("meta service config missing")
 	}
@@ -59,19 +57,16 @@ func (a *App) Setup(ctx context.Context) (err error) {
 	//
 	if a.conf.GrpcEnabled {
 		a.gRpcService = grpc.NewServer()
-		if a.conf.ClusterMode.Enabled {
-			logger.Info("etcd enabled", logger.Interface("setting", a.conf.ClusterMode))
 
-			a.etcd, err = etcd.NewFromURLs(a.conf.ClusterMode.Endpoints)
-			if err != nil {
-				logger.Error("error when build etcd client", logger.Err(err))
-				return err
-			}
-		}
 		grpc_handler.SetupService(a.gRpcService)
-		err = grpc_client.Init(a.etcd)
+	}
+
+	if a.conf.ClusterMode.Enabled {
+		logger.Info("etcd enabled", logger.Interface("setting", a.conf.ClusterMode))
+
+		a.etcd, err = etcd.NewFromURLs(a.conf.ClusterMode.Endpoints)
 		if err != nil {
-			logger.Error("error when connect grpc", logger.Err(err))
+			logger.Error("error when build etcd client", logger.Err(err))
 			return err
 		}
 	}
@@ -103,12 +98,32 @@ func (a *App) Start() error {
 				errChan <- err
 			}
 		}()
+	}
 
-		err = a.register(lis)
+	if a.conf.ClusterMode.Enabled {
+		cluster.InitEtcdManager(a.ctx, a.etcd, a.conf, a.id)
+		manager := cluster.GetManger()
+		err = manager.Register(lis)
 		if err != nil {
-			logger.Error("register rpc failed", logger.Err(err))
+			logger.Error("register node failed", logger.Err(err))
 			return err
 		}
+		logger.Info("registered the node, now enter grace period",
+			logger.String("serviceName", a.conf.ClusterName),
+			logger.String("instanceId", a.id),
+			logger.String("gracePeriodDuration", fmt.Sprintf("%d s", a.conf.ClusterMode.GracePeriod)),
+		)
+		manager.AttachLoad()
+		time.Sleep(time.Duration(a.conf.ClusterMode.GracePeriod) * time.Second)
+
+		// TODO Init routing
+
+	} else {
+		logger.Info(
+			"cluster mode disabled, skip register the node",
+			logger.String("serviceName", a.conf.ClusterName),
+			logger.String("instanceId", a.id),
+		)
 	}
 
 	select {
@@ -117,63 +132,6 @@ func (a *App) Start() error {
 	case <-a.sigChan:
 		return nil
 	}
-}
-
-func (a *App) register(lis net.Listener) (err error) {
-	conf := a.conf.ClusterMode
-	if conf.Enabled {
-		logger.Info(
-			"register the rpc service",
-			logger.String("serviceName", a.conf.ClusterName),
-			logger.String("instanceId", a.id),
-		)
-
-		a.endpointManager, err = endpoints.NewManager(
-			a.etcd,
-			fmt.Sprintf(config.FmtEtcdSvcPath, a.conf.ClusterName),
-		)
-		if err != nil {
-			return err
-		}
-		var lease *etcd.LeaseGrantResponse
-
-		ctx, cancel := context.WithTimeout(a.ctx, defaultRegisterTimeoutMs*time.Millisecond)
-		defer cancel()
-		lease, err = a.etcd.Grant(ctx, conf.Ttl)
-		if err != nil {
-			return err
-		}
-
-		var keepAliveChan <-chan *etcd.LeaseKeepAliveResponse
-		keepAliveChan, err = a.etcd.Lease.KeepAlive(a.ctx, lease.ID) // Remember to use a.ctx, because the ctx with timeout will be canceled after the register method finished.
-		if err != nil {
-			return err
-		}
-		go func() {
-			for {
-				<-keepAliveChan
-			}
-		}()
-
-		err = a.endpointManager.AddEndpoint(
-			ctx,
-			fmt.Sprintf(config.FmtEtcdSvcRegisterPath, a.conf.ClusterName, a.id),
-			endpoints.Endpoint{
-				Addr: lis.Addr().String(),
-			},
-			etcd.WithLease(lease.ID),
-		)
-		if err != nil {
-			return err
-		}
-	} else {
-		logger.Info(
-			"discovery disabled, skip register the rpc service",
-			logger.String("serviceName", a.conf.ClusterName),
-			logger.String("instanceId", a.id),
-		)
-	}
-	return nil
 }
 
 func (a *App) Stop(sig os.Signal) {
