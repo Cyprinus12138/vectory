@@ -12,5 +12,5 @@ const (
 	Healthy     NodeStatus = "healthy"
 	Unhealthy   NodeStatus = "unhealthy"
 	Rebalancing NodeStatus = "rebalancing"
-	Failed      NodeStatus = "failed"
+	Inactive    NodeStatus = "inactive"
 )

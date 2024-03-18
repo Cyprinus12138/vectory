@@ -13,7 +13,6 @@ import (
 	"github.com/chilts/sid"
 	"github.com/gin-gonic/gin"
 	etcd "go.etcd.io/etcd/client/v3"
-	"go.etcd.io/etcd/client/v3/naming/endpoints"
 	"google.golang.org/grpc"
 	"net"
 	"net/http"
@@ -22,16 +21,15 @@ import (
 )
 
 type App struct {
-	ctx             context.Context
-	id              string
-	server          *http.Server
-	router          *gin.Engine
-	addr            string
-	gRpcService     *grpc.Server
-	conf            *config.ClusterMetaConfig
-	sigChan         chan os.Signal
-	etcd            *etcd.Client
-	endpointManager endpoints.Manager
+	ctx         context.Context
+	id          string
+	server      *http.Server
+	router      *gin.Engine
+	addr        string
+	gRpcService *grpc.Server
+	conf        *config.ClusterMetaConfig
+	sigChan     chan os.Signal
+	etcd        *etcd.Client
 }
 
 func (a *App) Setup(ctx context.Context) (err error) {
@@ -113,7 +111,7 @@ func (a *App) Start() error {
 			logger.String("instanceId", a.id),
 			logger.String("gracePeriodDuration", fmt.Sprintf("%d s", a.conf.ClusterMode.GracePeriod)),
 		)
-		manager.AttachLoad()
+		manager.ReportLoad()
 		time.Sleep(time.Duration(a.conf.ClusterMode.GracePeriod) * time.Second)
 
 		// TODO Init routing
@@ -138,10 +136,7 @@ func (a *App) Stop(sig os.Signal) {
 
 	if a.conf.ClusterMode.Enabled {
 		logger.Info("unregistering rpc")
-		err := a.endpointManager.DeleteEndpoint(a.ctx, fmt.Sprintf(config.FmtEtcdSvcRegisterPath, a.conf.ClusterName, a.id))
-		if err != nil {
-			logger.Error("unregister rpc failed", logger.Err(err))
-		}
+		cluster.GetManger().Unregister()
 	}
 
 	if a.conf.GrpcEnabled {

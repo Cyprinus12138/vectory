@@ -9,8 +9,12 @@ func GetRootPath() string {
 	return fmt.Sprintf("/vectory/%s", pkg.ClusterName)
 }
 
+func GetNodeMetaPathPrefix() string {
+	return fmt.Sprintf("%s/node/meta", GetRootPath())
+}
+
 func GetNodeMetaPath(id string) string {
-	return fmt.Sprintf("%s/node/meta/%s", GetRootPath(), id)
+	return fmt.Sprintf("%s/%s", GetNodeMetaPathPrefix(), id)
 }
 
 func GetNodeLoadPath(id string) string {
