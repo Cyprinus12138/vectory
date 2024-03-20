@@ -1,5 +1,15 @@
 package engine
 
+import (
+	"context"
+	"github.com/Cyprinus12138/vectory/internal/config"
+	"github.com/Cyprinus12138/vectory/internal/engine/downloader"
+	"github.com/Cyprinus12138/vectory/internal/utils/logger"
+	"github.com/robfig/cron/v3"
+)
+
+var scheduler = cron.New()
+
 var metricType = map[int]string{
 	0: "INNER_PRODUCT", //< maximum inner product search
 	1: "L2",            //< squared L2 search
@@ -23,6 +33,13 @@ const (
 	RediS IndexType = "rs"
 )
 
+func (i *IndexType) ToString() string {
+	if i != nil {
+		return string(*i)
+	}
+	return ""
+}
+
 type ReloadMode string
 
 const (
@@ -35,8 +52,15 @@ type ScheduleType string
 const (
 	Cron      ScheduleType = "cron"
 	Internal  ScheduleType = "interval"
-	FixedTime ScheduleType = "fixed"
+	FixedTime ScheduleType = "fixed" // Not really supported now.
 )
+
+func (i *ScheduleType) ToString() string {
+	if i != nil {
+		return string(*i)
+	}
+	return ""
+}
 
 type TimeUnit string
 
@@ -84,16 +108,10 @@ type ReloadSetting struct {
 	Schedule ScheduleSetting
 }
 
-type IndexSource struct {
-	Type     string
-	Location string
-
-	Reload ReloadSetting
-}
-
 type IndexManifest struct {
 	Meta   IndexMeta
-	Source IndexSource
+	Source *downloader.IndexSource
+	Reload ReloadSetting
 }
 
 type Index interface {
@@ -113,4 +131,17 @@ type Index interface {
 
 	// InputDim returns the dimension of the indexed vectors.
 	InputDim() int
+
+	// CheckAvailable is used to check whether the index is available before calling the index searching.
+	CheckAvailable() error
+}
+
+func NewIndex(ctx context.Context, manifest *IndexManifest) (Index, error) {
+	switch manifest.Meta.Type {
+	case Faiss:
+		return newFaissIndex(ctx, manifest)
+	default:
+		logger.CtxError(ctx, "invalid index type", logger.String("type", manifest.Meta.Type.ToString()))
+		return nil, config.ErrInvalidIndexType
+	}
 }
