@@ -1,5 +1,5 @@
 config_manager:
-  enable_remote: true
+  enable_remote: false
   remote:
     - provider: "etcd3" # "etcd", "etcd3", "consul" or "firestore"
       endpoint: "http://192.168.100.108:30001;http://192.168.100.108:30002;http://192.168.100.108:30003"

@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"github.com/Cyprinus12138/vectory/internal/app"
 	"github.com/Cyprinus12138/vectory/internal/config"
+	"github.com/Cyprinus12138/vectory/internal/core"
 	"github.com/Cyprinus12138/vectory/internal/utils/config_manager"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/Cyprinus12138/vectory/internal/utils/monitor"
@@ -14,10 +14,10 @@ import (
 	"syscall"
 )
 
-var server app.App
+var server core.App
 
 func init() {
-	err := config_manager.Init("./etc/service.yml", []viper.RegisteredConfig{
+	err := config_manager.Init("./etc/config.yml", []viper.RegisteredConfig{
 		{
 			Key:      config.ConfKeyClusterMeta,
 			CanBeNil: false,

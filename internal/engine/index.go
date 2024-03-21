@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/engine/downloader"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
@@ -24,6 +25,10 @@ var metricType = map[int]string{
 	22: "JensenShannon",
 	23: "Jaccard", //< defined as: sum_i(min(a_i, b_i)) / sum_i(max(a_i, b_i))   <-- where a_i, b_i > 0
 }
+
+const (
+	shardKeyFmt = "%s_%d_%d"
+)
 
 type IndexType string
 
@@ -114,6 +119,31 @@ type IndexManifest struct {
 	Reload ReloadSetting
 }
 
+func (m *IndexManifest) Validate() error {
+	// TODO
+	return nil
+}
+
+type Shard struct {
+	ShardId   int32
+	ReplicaId int32
+}
+
+func (m *IndexManifest) GenerateShards() []Shard {
+	meta := m.Meta
+	result := make([]Shard, 0, meta.Shards*meta.Replicas)
+	var shard, replica int32
+	for shard = 0; shard < meta.Shards; shard++ {
+		for replica = 0; replica < meta.Replicas; replica++ {
+			result = append(result, Shard{
+				ShardId:   shard,
+				ReplicaId: replica,
+			})
+		}
+	}
+	return result
+}
+
 type Index interface {
 	// Search queries the index with the vectors in x.
 	// Returns the IDs of the k nearest neighbors for each query vector and the
@@ -134,14 +164,27 @@ type Index interface {
 
 	// CheckAvailable is used to check whether the index is available before calling the index searching.
 	CheckAvailable() error
+
+	// ShardKey returns a shard key string with format of: {indexName}_{shardId}_{replicaId}
+	ShardKey() string
+
+	// Revision returns the loaded index revision.
+	Revision() int64
+
+	// Reload triggers a reloading action for an index, can be call manually or scheduled.
+	Reload(ctx context.Context) error
 }
 
-func NewIndex(ctx context.Context, manifest *IndexManifest) (Index, error) {
+func NewIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (Index, error) {
 	switch manifest.Meta.Type {
 	case Faiss:
-		return newFaissIndex(ctx, manifest)
+		return newFaissIndex(ctx, manifest, shard)
 	default:
 		logger.CtxError(ctx, "invalid index type", logger.String("type", manifest.Meta.Type.ToString()))
 		return nil, config.ErrInvalidIndexType
 	}
+}
+
+func GetShardKey(idx IndexManifest, shard Shard) string {
+	return fmt.Sprintf(shardKeyFmt, idx.Meta.Name, shard.ShardId, shard.ReplicaId)
 }

@@ -21,6 +21,14 @@ func GetNodeLoadPath(id string) string {
 	return fmt.Sprintf("%s/node/load/%s", GetRootPath(), id)
 }
 
-func GetIndexMetaPath(indexName string) string {
-	return fmt.Sprintf("%s/index/%s", GetRootPath(), indexName)
+func GetLocalIndexRootPath() string {
+	return "./etc/index"
+}
+
+func GetLocalIndexPath(fileName string) string {
+	return fmt.Sprintf("%s/%s", GetLocalIndexRootPath(), fileName)
+}
+
+func GetIndexManifestPathPrefix() string {
+	return fmt.Sprintf("%s/index", GetRootPath())
 }

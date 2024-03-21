@@ -26,7 +26,8 @@ type EtcdManager struct {
 	nodeId         string
 	keepaliveLease *etcd.LeaseGrantResponse
 
-	attachedLoad    bool
+	attachedLoad bool
+	// TODO Add mutex to protect the ring.
 	clusterHashRing *hashring.HashRing
 }
 
@@ -257,4 +258,9 @@ func (e *EtcdManager) SyncCluster() error {
 		}
 	}()
 	return nil
+}
+
+func (e *EtcdManager) NeedLoad(key string) bool {
+	node, ok := e.clusterHashRing.GetNode(key)
+	return ok && node == e.nodeId
 }

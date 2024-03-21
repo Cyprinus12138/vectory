@@ -43,7 +43,7 @@ func Init(cfgPath string, configSchema []viper.RegisteredConfig) (err error) {
 		cfg.remoteViper.SetConfigType("json")
 		cfg.remoteViper.Register(configSchema)
 		for _, provider := range meta.Remote {
-			err = cfg.remoteViper.AddRemoteProvider(provider.Provider, provider.Endpoint, ConfigRootPath+provider.Path)
+			err = cfg.remoteViper.AddRemoteProvider(provider.Provider, provider.Endpoint, provider.Path)
 			if err != nil {
 				return err
 			}

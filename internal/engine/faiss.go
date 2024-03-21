@@ -18,13 +18,14 @@ type FaissIndex struct {
 	index       faiss.Index
 	reloading   *atomic.Bool
 	reloadEntry cron.EntryID
+	shard       Shard
 	revision    int64
 
 	manifest *IndexManifest
 }
 
-func newFaissIndex(ctx context.Context, manifest *IndexManifest) (*FaissIndex, error) {
-	dl, err := downloader.NewDownLoader(manifest.Source)
+func newFaissIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (*FaissIndex, error) {
+	dl, err := downloader.NewDownLoader(ctx, manifest.Source, shard)
 	if err != nil {
 		logger.CtxError(ctx, "create downloader failed", logger.Err(err), logger.Interface("source", manifest.Source))
 		return nil, err
@@ -49,6 +50,7 @@ func newFaissIndex(ctx context.Context, manifest *IndexManifest) (*FaissIndex, e
 		index:     rawIndex,
 		reloading: reloading,
 
+		shard:    shard,
 		revision: revision,
 		manifest: manifest,
 	}
@@ -112,10 +114,17 @@ func (f *FaissIndex) InputDim() int {
 }
 
 func (f *FaissIndex) CheckAvailable() error {
+	f.rw.RLock()
+	defer f.rw.RUnlock()
+
 	if f.index == nil {
 		return config.ErrNilIndex
 	}
 	return nil
+}
+
+func (f *FaissIndex) ShardKey() string {
+	return fmt.Sprintf(shardKeyFmt, f.manifest.Meta.Name, f.shard.ShardId, f.shard.ReplicaId)
 }
 
 func (f *FaissIndex) Revision() int64 {
@@ -135,7 +144,7 @@ func (f *FaissIndex) Reload(ctx context.Context) error {
 	defer f.reloading.Store(false)
 
 	source := f.manifest.Source
-	dl, err := downloader.NewDownLoader(source)
+	dl, err := downloader.NewDownLoader(ctx, source, f.shard)
 	if err != nil {
 		logger.CtxError(ctx, "create downloader failed", logger.Err(err), logger.Interface("source", source))
 		return err

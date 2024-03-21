@@ -1,5 +1,10 @@
 package downloader
 
+import (
+	"context"
+	"github.com/Cyprinus12138/vectory/internal/engine"
+)
+
 type IndexSource struct {
 	Type     string
 	Location string
@@ -10,6 +15,6 @@ type Downloader interface {
 	DownloadUpdate(currentRevision int64) (localPath string, revision int64, err error)
 }
 
-func NewDownLoader(source *IndexSource) (Downloader, error) {
+func NewDownLoader(ctx context.Context, source *IndexSource, shard engine.Shard) (Downloader, error) {
 	return nil, nil
 }
