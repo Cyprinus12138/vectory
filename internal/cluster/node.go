@@ -9,6 +9,7 @@ import (
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	etcd "go.etcd.io/etcd/client/v3"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/serialx/hashring"
@@ -29,24 +30,31 @@ type EtcdManager struct {
 	attachedLoad bool
 	// TODO Add mutex to protect the ring.
 	clusterHashRing *hashring.HashRing
+	nodeMateMap     sync.Map
 }
 
-type nodeMeta struct {
+type NodeMeta struct {
 	NodeId string         `json:"node_id"`
 	Addr   string         `json:"addr"`
 	Status pkg.NodeStatus `json:"status"`
 }
 
-type nodeLoad struct {
+type NodeLoad struct {
 	CPU float64 `json:"CPU"`
+}
+
+type Routing struct {
+	Node *NodeMeta
+	Load *NodeLoad
 }
 
 func InitEtcdManager(ctx context.Context, e *etcd.Client, conf *config.ClusterMetaConfig, nodeId string) {
 	manager = &EtcdManager{
-		ctx:    ctx,
-		etcd:   e,
-		conf:   conf,
-		nodeId: nodeId,
+		ctx:         ctx,
+		etcd:        e,
+		conf:        conf,
+		nodeId:      nodeId,
+		nodeMateMap: sync.Map{},
 	}
 }
 
@@ -54,6 +62,8 @@ func GetManger() *EtcdManager {
 	return manager
 }
 
+// Register will register the node to EtCD,
+// we utilise the keepalive lease to maintain the node online in the cluster
 func (e *EtcdManager) Register(lis net.Listener) (err error) {
 	conf := e.conf.ClusterMode
 	logger.Info(
@@ -62,7 +72,7 @@ func (e *EtcdManager) Register(lis net.Listener) (err error) {
 		logger.String("instanceId", e.nodeId),
 	)
 
-	meta := nodeMeta{
+	meta := NodeMeta{
 		NodeId: e.nodeId,
 		Addr:   lis.Addr().String(),
 		Status: pkg.Start,
@@ -92,13 +102,22 @@ func (e *EtcdManager) Register(lis net.Listener) (err error) {
 	}()
 
 	_, err = e.etcd.Put(ctx, config.GetNodeMetaPath(e.nodeId), string(metaStr), etcd.WithLease(e.keepaliveLease.ID))
-
 	if err != nil {
 		return err
 	}
+
+	// The status updating information is consumed here, updating the status info on the EtCD.
+	go func(ctx context.Context) {
+		select {
+		case status := <-pkg.StatusUpdating:
+			e.setNodeStatus(ctx, status)
+		}
+	}(e.ctx)
+
 	return nil
 }
 
+// Unregister is not really necessary actually because the node meta will be removed by the keepalive lease mechanism.
 func (e *EtcdManager) Unregister() {
 	logger.Info(
 		"unregistering the node",
@@ -116,6 +135,7 @@ func (e *EtcdManager) Unregister() {
 	}
 }
 
+// ReportLoad will update the load information of the node to the EtCD regularly.
 func (e *EtcdManager) ReportLoad() {
 	if e.attachedLoad {
 		return
@@ -125,8 +145,7 @@ func (e *EtcdManager) ReportLoad() {
 
 	go func(key string) {
 		for {
-			load := &nodeLoad{}
-
+			load := &NodeLoad{}
 			usage, err := cpu.Percent(time.Duration(5)*time.Second, false) // There's a sleep logic inside the Percent method.
 			if err != nil || len(usage) <= 0 {
 				logger.Error("attach load get CPU usage failed", logger.Err(err))
@@ -166,38 +185,22 @@ func (e *EtcdManager) ReportLoad() {
 	}(key)
 }
 
-func (e *EtcdManager) SetNodeStatus(status pkg.NodeStatus) {
+func (e *EtcdManager) setNodeStatus(ctx context.Context, status pkg.NodeStatus) {
 	key := config.GetNodeMetaPath(e.nodeId)
-	meta := &nodeMeta{}
 
-	response, err := e.etcd.Get(e.ctx, key, etcd.WithLimit(1))
+	meta, err := e.getNodeMeta(ctx, e.nodeId)
 	if err != nil {
-		logger.Error("attach load get registered node meta failed", logger.Err(err))
-		return
-	}
-	if len(response.Kvs) <= 0 {
-		logger.Error("attach load get registered node meta not found", logger.Err(err))
-		return
-	}
-
-	err = json.Unmarshal(response.Kvs[0].Value, meta)
-	if err != nil {
-		logger.Error("attach load decode registered node meta not found", logger.Err(err))
+		logger.CtxError(ctx, "can not find meta for myself")
 		return
 	}
 
 	meta.Status = status
 	metaStr, _ := json.Marshal(meta)
-	ctx, cancel := context.WithTimeout(e.ctx, defaultRegisterTimeoutMs*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, defaultRegisterTimeoutMs*time.Millisecond)
 	defer cancel()
-	txn := e.etcd.Txn(ctx)
-	_, err = txn.If(
-		etcd.Compare(etcd.ModRevision(key), "=", response.Kvs[0].ModRevision),
-	).Then(
-		etcd.OpPut(key, string(metaStr), etcd.WithLease(e.keepaliveLease.ID)),
-	).Commit()
+	_, err = e.etcd.Put(ctx, key, string(metaStr), etcd.WithLease(e.keepaliveLease.ID))
 	if err != nil {
-		logger.Error("attach load put registered node meta failed", logger.Err(err))
+		logger.Error("put node meta when set node status failed", logger.Err(err))
 		return
 	}
 }
@@ -212,7 +215,7 @@ func (e *EtcdManager) SyncCluster() error {
 	}
 	nodes := make([]string, 0, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
-		meta := &nodeMeta{}
+		meta := &NodeMeta{}
 		jErr := json.Unmarshal(kv.Value, meta)
 		if jErr != nil {
 			logger.Error("invalid node meta", logger.String("meta", string(kv.Value)), logger.Err(jErr))
@@ -240,19 +243,22 @@ func (e *EtcdManager) SyncCluster() error {
 				return
 			}
 			for _, event := range watchResp.Events {
-				meta := &nodeMeta{}
+				meta := &NodeMeta{}
 				jErr := json.Unmarshal(event.Kv.Value, meta)
 				if jErr != nil {
 					logger.Error("invalid node meta", logger.String("meta", string(event.Kv.Value)), logger.Err(jErr))
 				}
 				if event.IsCreate() {
 					e.clusterHashRing.AddNode(meta.NodeId)
+					e.nodeMateMap.Store(meta.NodeId, meta)
 				}
 				if event.Type == mvccpb.DELETE {
+					e.nodeMateMap.Delete(meta.NodeId)
 					e.clusterHashRing.RemoveNode(meta.NodeId)
 				}
 				if event.IsModify() && meta.Status == pkg.Inactive {
 					e.clusterHashRing.RemoveNode(meta.NodeId)
+					e.nodeMateMap.Store(meta.NodeId, meta)
 				}
 			}
 		}
@@ -260,7 +266,99 @@ func (e *EtcdManager) SyncCluster() error {
 	return nil
 }
 
+// NeedLoad returns whether the shard is loaded in current node.
 func (e *EtcdManager) NeedLoad(key string) bool {
 	node, ok := e.clusterHashRing.GetNode(key)
 	return ok && node == e.nodeId
+}
+
+func (e *EtcdManager) getNodeMeta(ctx context.Context, nodeId string) (*NodeMeta, error) {
+	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("node", nodeId))
+
+	raw, ok := e.nodeMateMap.Load(nodeId)
+	if !ok {
+		log.Error("node is no long valid")
+		return nil, config.ErrNodeNotAvailable
+	}
+	node, ok := raw.(*NodeMeta)
+	if !ok {
+		log.Error("type conversion failed", logger.Interface("NodeMeta", raw))
+		return nil, config.ErrTypeAssertion
+	}
+
+	return node, nil
+}
+
+func (e *EtcdManager) getNode(ctx context.Context, key string) (node *NodeMeta, err error) {
+	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("key", key))
+	nodeId, ok := e.clusterHashRing.GetNode(key)
+	if !ok {
+		log.Error("no available node in the cluster")
+		return nil, config.ErrNodeNotAvailable
+	}
+
+	log = log.With(logger.String("node", nodeId))
+	node, err = e.getNodeMeta(ctx, nodeId)
+	if err != nil {
+		log.Error("get node meta failed", logger.Err(err))
+	}
+
+	switch node.Status {
+	case pkg.Init:
+	case pkg.Start:
+	case pkg.Inactive:
+		log.Warn("node is not available but not healthy", logger.String("status", node.Status.ToString()))
+		return nil, config.ErrNodeNotAvailable
+	case pkg.Healthy:
+		return node, nil
+	case pkg.Rebalancing:
+	case pkg.Unhealthy:
+		log.Warn("node is available but not healthy", logger.String("status", node.Status.ToString()))
+		return node, nil
+	}
+	return nil, config.ErrUnknownStatus
+}
+
+func (e *EtcdManager) getLoad(ctx context.Context, nodeId string) (load *NodeLoad, err error) {
+	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("nodeId", nodeId))
+	key := config.GetNodeLoadPath(e.nodeId)
+	ctx, cancel := context.WithTimeout(e.ctx, defaultRegisterTimeoutMs*time.Millisecond)
+	defer cancel()
+	response, err := e.etcd.Get(ctx, key, etcd.WithLimit(1))
+	if err != nil {
+		log.Error("attach load get registered node load failed", logger.Err(err))
+		return nil, err
+	}
+	if len(response.Kvs) <= 0 {
+		log.Error("attach load get registered node load not found", logger.Err(err))
+		return nil, err
+	}
+	err = json.Unmarshal(response.Kvs[0].Value, load)
+	if err != nil {
+		log.Error("attach load decode registered node load not found", logger.Err(err))
+		return nil, err
+	}
+	return load, nil
+
+}
+
+func (e *EtcdManager) Route(ctx context.Context, key string) (routing *Routing, err error) {
+	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("key", key))
+	node, err := e.getNode(ctx, key)
+	if err != nil {
+		log.Error("getNode failed", logger.Err(err))
+		return nil, err
+	}
+	load := &NodeLoad{}
+	if e.attachedLoad {
+		load, err = e.getLoad(ctx, node.NodeId)
+		if err != nil {
+			log.Error("getLoad failed", logger.Err(err))
+			return nil, err
+		}
+	}
+	return &Routing{
+		Node: node,
+		Load: load,
+	}, nil
 }

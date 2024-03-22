@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Cyprinus12138/vectory/internal/cluster"
 	"github.com/Cyprinus12138/vectory/internal/config"
+	"github.com/Cyprinus12138/vectory/internal/engine"
 	"github.com/Cyprinus12138/vectory/internal/grpc_handler"
 	"github.com/Cyprinus12138/vectory/internal/http_handler"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
@@ -20,7 +21,7 @@ import (
 	"time"
 )
 
-type App struct {
+type Vectory struct {
 	ctx         context.Context
 	id          string
 	server      *http.Server
@@ -32,7 +33,7 @@ type App struct {
 	etcd        *etcd.Client
 }
 
-func (a *App) Setup(ctx context.Context) (err error) {
+func (a *Vectory) Setup(ctx context.Context) (err error) {
 
 	// Setup instance id
 	pkg.ClusterName = a.conf.ClusterName
@@ -71,7 +72,7 @@ func (a *App) Setup(ctx context.Context) (err error) {
 	return nil
 }
 
-func (a *App) Start() error {
+func (a *Vectory) Start() error {
 	logger.Info("starting the server")
 
 	errChan := make(chan error, 2)
@@ -111,17 +112,30 @@ func (a *App) Start() error {
 			logger.String("instanceId", a.id),
 			logger.String("gracePeriodDuration", fmt.Sprintf("%d s", a.conf.ClusterMode.GracePeriod)),
 		)
-		manager.ReportLoad()
+		manager.ReportLoad() // TODO Add toggle in the config to determine whether use the load as the routing weight.
+
+		// For cluster mode, a grace period is introduced, to wait all instance come online, avoiding rebalancing too
+		// frequently at the staging period.
 		time.Sleep(time.Duration(a.conf.ClusterMode.GracePeriod) * time.Second)
-
-		// TODO Init routing
-
 	} else {
+		// Dispose the status updating message because there is no consumer to handle them.
+		// It will be consumed by cluster manager to make the node status sync with remote registry (eg. EtCD)
+		go func() {
+			for {
+				<-pkg.StatusUpdating
+			}
+		}()
 		logger.Info(
 			"cluster mode disabled, skip register the node",
 			logger.String("serviceName", a.conf.ClusterName),
 			logger.String("instanceId", a.id),
 		)
+	}
+
+	err = engine.InitManager(a.ctx, a.conf.ClusterMode.Enabled, a.etcd)
+	if err != nil {
+		logger.Error("init engine failed", logger.Err(err))
+		return err
 	}
 
 	select {
@@ -132,7 +146,7 @@ func (a *App) Start() error {
 	}
 }
 
-func (a *App) Stop(sig os.Signal) {
+func (a *Vectory) Stop(sig os.Signal) {
 
 	if a.conf.ClusterMode.Enabled {
 		logger.Info("unregistering rpc")

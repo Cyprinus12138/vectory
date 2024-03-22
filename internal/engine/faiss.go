@@ -79,7 +79,7 @@ func (f *FaissIndex) Search(x []float32, k int64) (distances []float32, labels [
 	}
 
 	if len(x) < f.InputDim() {
-		return nil, nil, config.ErrWrongDimension
+		return nil, nil, config.ErrWrongInputDimension
 	}
 
 	return f.index.Search(x, k)
@@ -121,10 +121,6 @@ func (f *FaissIndex) CheckAvailable() error {
 		return config.ErrNilIndex
 	}
 	return nil
-}
-
-func (f *FaissIndex) ShardKey() string {
-	return fmt.Sprintf(shardKeyFmt, f.manifest.Meta.Name, f.shard.ShardId, f.shard.ReplicaId)
 }
 
 func (f *FaissIndex) Revision() int64 {
@@ -170,6 +166,10 @@ func (f *FaissIndex) Reload(ctx context.Context) error {
 	f.rw.Unlock()
 
 	return nil
+}
+
+func (f *FaissIndex) Meta() IndexMeta {
+	return f.manifest.Meta
 }
 
 func (f *FaissIndex) startReload(setting ReloadSetting) (err error) {

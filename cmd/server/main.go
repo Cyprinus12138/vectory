@@ -14,7 +14,7 @@ import (
 	"syscall"
 )
 
-var server core.App
+var server core.Vectory
 
 func init() {
 	err := config_manager.Init("./etc/config.yml", []viper.RegisteredConfig{

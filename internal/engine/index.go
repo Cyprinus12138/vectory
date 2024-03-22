@@ -125,8 +125,13 @@ func (m *IndexManifest) Validate() error {
 }
 
 type Shard struct {
+	IndexName string
 	ShardId   int32
 	ReplicaId int32
+}
+
+func (s *Shard) ShardKey() string {
+	return fmt.Sprintf(shardKeyFmt, s.IndexName, s.ShardId, s.ReplicaId)
 }
 
 func (m *IndexManifest) GenerateShards() []Shard {
@@ -136,6 +141,7 @@ func (m *IndexManifest) GenerateShards() []Shard {
 	for shard = 0; shard < meta.Shards; shard++ {
 		for replica = 0; replica < meta.Replicas; replica++ {
 			result = append(result, Shard{
+				IndexName: meta.Name,
 				ShardId:   shard,
 				ReplicaId: replica,
 			})
@@ -165,14 +171,13 @@ type Index interface {
 	// CheckAvailable is used to check whether the index is available before calling the index searching.
 	CheckAvailable() error
 
-	// ShardKey returns a shard key string with format of: {indexName}_{shardId}_{replicaId}
-	ShardKey() string
-
 	// Revision returns the loaded index revision.
 	Revision() int64
 
 	// Reload triggers a reloading action for an index, can be call manually or scheduled.
 	Reload(ctx context.Context) error
+	// Meta returns the loaded index meta info.
+	Meta() IndexMeta
 }
 
 func NewIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (Index, error) {
