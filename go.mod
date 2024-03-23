@@ -9,6 +9,7 @@ replace github.com/spf13/viper/remote v1.15.0 => github.com/Cyprinus12138/viper/
 require (
 	github.com/DataIntelligenceCrew/go-faiss v0.2.0
 	github.com/chilts/sid v0.0.0-20190607042430-660e94789ec9
+	github.com/ghodss/yaml v1.0.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
@@ -112,5 +113,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

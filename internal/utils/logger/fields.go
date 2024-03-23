@@ -21,4 +21,8 @@ func Duration(key string, duration time.Duration) zap.Field {
 	return zap.Duration(key, duration)
 }
 
+func Int64(key string, val int64) zap.Field {
+	return zap.Int64(key, val)
+}
+
 // Add necessary field definition below.

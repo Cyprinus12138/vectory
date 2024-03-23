@@ -5,7 +5,7 @@ config_manager:
       endpoint: "http://192.168.100.108:30001;http://192.168.100.108:30002;http://192.168.100.108:30003"
       path: "/example"
 
-service:
+cluster:
   cluster_name: "example"
   grpc_enabled: true
   cluster_mode:

@@ -35,5 +35,7 @@ var (
 	ErrTypeAssertion         = errors.New("type assertion failed")
 	ErrIndexNotFound         = errors.New("index not found")
 	ErrShardNotFound         = errors.New("shard not found")
+	ErrShardFileNotFound     = errors.New("shard file not found")
+	ErrGetRevisionFailed     = errors.New("get index revision failed")
 	ErrOutputDimension       = errors.New("error output dimension")
 )

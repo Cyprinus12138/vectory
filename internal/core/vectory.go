@@ -34,6 +34,10 @@ type Vectory struct {
 }
 
 func (a *Vectory) Setup(ctx context.Context) (err error) {
+	a.conf = config.GetClusterMetaConfig()
+	if a.conf == nil {
+		logger.Fatal("meta service config missing")
+	}
 
 	// Setup instance id
 	pkg.ClusterName = a.conf.ClusterName
@@ -41,10 +45,6 @@ func (a *Vectory) Setup(ctx context.Context) (err error) {
 	logger.Info("setting up the service", logger.String("instanceId", a.id))
 
 	a.sigChan = make(chan os.Signal, 1)
-	a.conf = config.GetClusterMetaConfig()
-	if a.conf == nil {
-		logger.Fatal("meta service config missing")
-	}
 	a.ctx = ctx
 	a.addr = fmt.Sprintf(config.FmtAddr, config.GetPodIp(), config.GetPort())
 	a.router = http_handler.BuildRouter()

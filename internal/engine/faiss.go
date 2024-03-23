@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/Cyprinus12138/vectory/internal/config"
-	"github.com/Cyprinus12138/vectory/internal/engine/downloader"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/DataIntelligenceCrew/go-faiss"
 	"github.com/pkg/errors"
@@ -25,7 +24,7 @@ type FaissIndex struct {
 }
 
 func newFaissIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (*FaissIndex, error) {
-	dl, err := downloader.NewDownLoader(ctx, manifest.Source, shard)
+	dl, err := NewDownLoader(ctx, manifest.Source, shard)
 	if err != nil {
 		logger.CtxError(ctx, "create downloader failed", logger.Err(err), logger.Interface("source", manifest.Source))
 		return nil, err
@@ -140,7 +139,7 @@ func (f *FaissIndex) Reload(ctx context.Context) error {
 	defer f.reloading.Store(false)
 
 	source := f.manifest.Source
-	dl, err := downloader.NewDownLoader(ctx, source, f.shard)
+	dl, err := NewDownLoader(ctx, source, f.shard)
 	if err != nil {
 		logger.CtxError(ctx, "create downloader failed", logger.Err(err), logger.Interface("source", source))
 		return err

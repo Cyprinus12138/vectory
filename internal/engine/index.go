@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/Cyprinus12138/vectory/internal/config"
-	"github.com/Cyprinus12138/vectory/internal/engine/downloader"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/robfig/cron/v3"
 )
@@ -115,7 +114,7 @@ type ReloadSetting struct {
 
 type IndexManifest struct {
 	Meta   IndexMeta
-	Source *downloader.IndexSource
+	Source *IndexSource
 	Reload ReloadSetting
 }
 
@@ -181,11 +180,17 @@ type Index interface {
 }
 
 func NewIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (Index, error) {
+	logger.CtxInfo(ctx, "loading shard", logger.String("shardKey", shard.ShardKey()))
 	switch manifest.Meta.Type {
 	case Faiss:
 		return newFaissIndex(ctx, manifest, shard)
 	default:
-		logger.CtxError(ctx, "invalid index type", logger.String("type", manifest.Meta.Type.ToString()))
+		logger.CtxError(
+			ctx,
+			"invalid index type",
+			logger.String("type", manifest.Meta.Type.ToString()),
+			logger.String("shardKey", shard.ShardKey()),
+		)
 		return nil, config.ErrInvalidIndexType
 	}
 }
