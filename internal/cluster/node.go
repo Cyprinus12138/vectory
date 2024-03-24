@@ -238,7 +238,7 @@ func (e *EtcdManager) SyncCluster() error {
 				logger.Fatal("watch cluster canceled",
 					logger.String("clusterName", e.conf.ClusterName),
 					logger.String("instanceId", e.nodeId),
-					logger.Err(err),
+					logger.Err(watchResp.Err()),
 				)
 				return
 			}

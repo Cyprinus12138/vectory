@@ -117,6 +117,12 @@ func (a *Vectory) Start() error {
 		// For cluster mode, a grace period is introduced, to wait all instance come online, avoiding rebalancing too
 		// frequently at the staging period.
 		time.Sleep(time.Duration(a.conf.ClusterMode.GracePeriod) * time.Second)
+
+		err = manager.SyncCluster()
+		if err != nil {
+			logger.Error("sync cluster nodes failed", logger.Err(err))
+			return err
+		}
 	} else {
 		// Dispose the status updating message because there is no consumer to handle them.
 		// It will be consumed by cluster manager to make the node status sync with remote registry (eg. EtCD)
@@ -132,10 +138,18 @@ func (a *Vectory) Start() error {
 		)
 	}
 
+	pkg.SetStatus(pkg.Init)
 	err = engine.InitManager(a.ctx, a.conf.ClusterMode.Enabled, a.etcd)
-	if err != nil {
-		logger.Error("init engine failed", logger.Err(err))
-		return err
+	if err == nil {
+		pkg.SetStatus(pkg.Healthy)
+	} else {
+		if errors.Is(err, config.ErrPartlySuccess) {
+			pkg.SetStatus(pkg.Unhealthy)
+		} else {
+			pkg.SetStatus(pkg.Inactive)
+			logger.Error("init engine failed", logger.Err(err))
+			return err
+		}
 	}
 
 	select {

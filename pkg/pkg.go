@@ -21,6 +21,9 @@ func SetStatus(status NodeStatus) {
 	statusMutex.Lock()
 	defer statusMutex.Unlock()
 
+	if Status == status {
+		return
+	}
 	Status = status
 	StatusUpdating <- status
 }
