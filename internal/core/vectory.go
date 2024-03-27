@@ -14,6 +14,9 @@ import (
 	"github.com/chilts/sid"
 	"github.com/gin-gonic/gin"
 	etcd "go.etcd.io/etcd/client/v3"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/trace"
 	"google.golang.org/grpc"
 	"net"
 	"net/http"
@@ -31,6 +34,9 @@ type Vectory struct {
 	conf        *config.ClusterMetaConfig
 	sigChan     chan os.Signal
 	etcd        *etcd.Client
+
+	traceProvider *trace.TracerProvider
+	meterProvider *metric.MeterProvider
 }
 
 func (a *Vectory) Setup(ctx context.Context) (err error) {
@@ -52,10 +58,15 @@ func (a *Vectory) Setup(ctx context.Context) (err error) {
 		Handler: a.router,
 		Addr:    a.addr,
 	}
+	err = a.initOTel()
+	if err != nil {
+		logger.Error("init oTel providers failed", logger.Err(err))
+		return err
+	}
 
 	//
 	if a.conf.GrpcEnabled {
-		a.gRpcService = grpc.NewServer()
+		a.gRpcService = grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler()))
 
 		grpc_handler.SetupService(a.gRpcService)
 	}
@@ -174,6 +185,10 @@ func (a *Vectory) Stop(sig os.Signal) {
 
 	logger.Info("stopping http server")
 	a.server.Shutdown(a.ctx)
+
+	logger.Info("shutting down tracerProvider")
+	a.traceProvider.Shutdown(a.ctx)
+	a.meterProvider.Shutdown(a.ctx)
 
 	logger.Info("stopping server")
 	a.sigChan <- sig

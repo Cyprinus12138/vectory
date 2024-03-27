@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -12,8 +13,9 @@ func DefaultLogger() *zap.Logger {
 }
 
 func DefaultLoggerWithCtx(ctx context.Context) *zap.Logger {
-	if reqId, ok := ctx.Value("ReqId").(string); ok {
-		return logger.With(String("ReqId", reqId))
+	traceID := trace.SpanContextFromContext(ctx).TraceID()
+	if traceID.IsValid() {
+		return logger.With(String("traceId", traceID.String()))
 	}
 	return logger
 }

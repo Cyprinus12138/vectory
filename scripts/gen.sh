@@ -6,4 +6,4 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 echo "Generating pb"
 protoc --go_out=proto   \
     --go-grpc_out=proto  \
-    proto/mq/*.proto
+    proto/vectory/*.proto

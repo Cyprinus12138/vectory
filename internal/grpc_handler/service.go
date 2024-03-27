@@ -7,7 +7,7 @@ import (
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/Cyprinus12138/vectory/internal/utils/monitor"
 	// To be updated based on proto definition.
-	server "github.com/Cyprinus12138/vectory/proto/mq.example"
+	server "github.com/Cyprinus12138/vectory/proto/vectory.core"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,14 +15,14 @@ import (
 
 type GRpcServer struct {
 	// To be updated based on proto definition.
-	server.ExampleServer
+	server.CoreServer
 	desc grpc.ServiceDesc
 }
 
 func NewServerImpl() *GRpcServer {
 	return &GRpcServer{
 		// To be updated based on proto definition.
-		desc: server.Example_ServiceDesc,
+		desc: server.Core_ServiceDesc,
 	}
 }
 
@@ -30,7 +30,7 @@ func SetupService(gRpcService *grpc.Server) {
 
 	serviceImpl := NewServerImpl()
 	// To be updated based on proto definition.
-	server.RegisterExampleServer(gRpcService, serviceImpl)
+	server.RegisterCoreServer(gRpcService, serviceImpl)
 	logger.Info(
 		"register rpc service impl",
 		logger.String("service", utils.ListProtoMethods(serviceImpl.desc)),
