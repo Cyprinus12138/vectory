@@ -30,7 +30,7 @@ type EtcdManager struct {
 	attachedLoad bool
 	// TODO Add mutex to protect the ring.
 	clusterHashRing *hashring.HashRing
-	nodeMateMap     sync.Map
+	nodeMateMap     sync.Map // Key: nodeId Value: NodeMeta
 }
 
 type NodeMeta struct {

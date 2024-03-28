@@ -26,7 +26,8 @@ var metricType = map[int]string{
 }
 
 const (
-	shardKeyFmt = "%s_%d_%d"
+	shardKeyFmt          = "%s_%d_%d"
+	shardKeyWoReplicaFmt = "%s_%d"
 )
 
 type IndexType string
@@ -129,8 +130,16 @@ type Shard struct {
 	ReplicaId int32
 }
 
+// ShardKey concatenates the IndexName ShardId and ReplicaId.
+// Used to determine which node should load this shard.
 func (s *Shard) ShardKey() string {
 	return fmt.Sprintf(shardKeyFmt, s.IndexName, s.ShardId, s.ReplicaId)
+}
+
+// UniqueShardKey concatenates the IndexName and ShardId without ReplicaId.
+// Used to maintain the unique shards on each node.
+func (s *Shard) UniqueShardKey() string {
+	return fmt.Sprintf(shardKeyWoReplicaFmt, s.IndexName, s.ShardId)
 }
 
 func (m *IndexManifest) GenerateShards() []Shard {
@@ -145,6 +154,21 @@ func (m *IndexManifest) GenerateShards() []Shard {
 				ReplicaId: replica,
 			})
 		}
+	}
+	return result
+}
+
+// GenerateUniqueShards ignores the ReplicaId ensuring each single unique shards
+// are only return just once.
+func (m *IndexManifest) GenerateUniqueShards() []Shard {
+	meta := m.Meta
+	result := make([]Shard, 0, meta.Shards*meta.Replicas)
+	var shard int32
+	for shard = 0; shard < meta.Shards; shard++ {
+		result = append(result, Shard{
+			IndexName: meta.Name,
+			ShardId:   shard,
+		})
 	}
 	return result
 }
@@ -175,8 +199,12 @@ type Index interface {
 
 	// Reload triggers a reloading action for an index, can be call manually or scheduled.
 	Reload(ctx context.Context) error
+
 	// Meta returns the loaded index meta info.
 	Meta() IndexMeta
+
+	// Shard returns the loaded shardInfo
+	Shard() *Shard
 }
 
 func NewIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (Index, error) {

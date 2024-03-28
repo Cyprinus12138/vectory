@@ -7,6 +7,7 @@ import (
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/Cyprinus12138/vectory/pkg"
 	"github.com/ghodss/yaml"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	etcd "go.etcd.io/etcd/client/v3"
 	"os"
@@ -159,7 +160,9 @@ type SearchResult struct {
 	Error  error
 	Result []Label
 
-	Routing *cluster.Routing
+	// ToRoute indicate whether this shard need to be routed to another node
+	// for processing in the further step.
+	ToRoute bool
 }
 
 func (i *IndexManager) loadIndex(ctx context.Context, manifest *IndexManifest) (totalShard, successShard int, err error) {
@@ -173,7 +176,7 @@ func (i *IndexManager) loadIndex(ctx context.Context, manifest *IndexManifest) (
 	clusterManger := cluster.GetManger()
 	shards := manifest.GenerateShards()
 	for _, shard := range shards {
-		if i.mode == Cluster && clusterManger != nil && !clusterManger.NeedLoad(shard.ShardKey()) {
+		if _, loaded := i.engineStore.Load(shard.UniqueShardKey()); (i.mode == Cluster && clusterManger != nil && !clusterManger.NeedLoad(shard.ShardKey())) || loaded {
 			continue
 		}
 		totalShard += 1
@@ -188,7 +191,7 @@ func (i *IndexManager) loadIndex(ctx context.Context, manifest *IndexManifest) (
 			i.markShardPending(ctx, shard)
 			continue
 		}
-		i.engineStore.Store(shard.ShardKey(), index)
+		i.engineStore.Store(shard.UniqueShardKey(), index)
 		successShard += 1
 	}
 	i.indexManifests.Store(manifest.Meta.Name, manifest)
@@ -210,9 +213,9 @@ func (i *IndexManager) deleteIndex(ctx context.Context, indexName string) {
 		return
 	}
 
-	shards := manifest.GenerateShards()
+	shards := manifest.GenerateUniqueShards()
 	for _, shard := range shards {
-		val, loaded := i.engineStore.LoadAndDelete(shard.ShardKey())
+		val, loaded := i.engineStore.LoadAndDelete(shard.UniqueShardKey())
 		if !loaded {
 			log.Debug("shard not loaded in current node", logger.String("shardKey", shard.ShardKey()))
 			continue
@@ -224,7 +227,7 @@ func (i *IndexManager) deleteIndex(ctx context.Context, indexName string) {
 		}
 		index.Delete()
 		deleted += 1
-		log.Info("engine has been release", logger.String("shardKey", shard.ShardKey()))
+		log.Info("engine has been release", logger.String("shardKey", index.Shard().ShardKey()))
 	}
 	log.Info("index delete done", logger.Int("deletedShards", deleted))
 }
@@ -256,7 +259,6 @@ func (i *IndexManager) unmarkShardPending(ctx context.Context, shard Shard) {
 func (i *IndexManager) Search(ctx context.Context, indexName string, x []float32, k int64) (result []SearchResult, err error) {
 	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("indexName", indexName))
 
-	clusterManager := cluster.GetManger()
 	val, ok := i.indexManifests.Load(indexName)
 	if !ok {
 		log.Error("get index not found")
@@ -267,27 +269,22 @@ func (i *IndexManager) Search(ctx context.Context, indexName string, x []float32
 		log.Error("type assertion for index manifest failed", logger.Interface("indexManifest", val))
 		return nil, config.ErrTypeAssertion
 	}
-	shards := manifest.GenerateShards()
+	shards := manifest.GenerateUniqueShards()
 	result = make([]SearchResult, len(shards))
 	for idx, shard := range shards {
-		if i.mode == Cluster && !clusterManager.NeedLoad(shard.ShardKey()) {
-			var iErr error
-			routing, iErr := clusterManager.Route(ctx, shard.ShardKey())
-			if iErr != nil {
-				log.Error("route shard failed", logger.Err(iErr))
-			}
+		result[idx], err = i.SearchShard(ctx, shard, x, k)
+		if err != nil && (!errors.Is(err, config.ErrShardNotFound) || i.mode == Single) {
+			log.Error("search failed", logger.Err(err))
+		}
+		if i.mode == Cluster && errors.Is(err, config.ErrShardNotFound) {
 			result[idx] = SearchResult{
 				Shard:   shard,
-				Error:   iErr,
 				Result:  nil,
-				Routing: routing,
+				ToRoute: true,
 			}
 			continue
 		}
-		result[idx], err = i.SearchShard(ctx, shard, x, k)
-		if err != nil {
-			log.Error("search failed", logger.Err(err))
-		}
+
 	}
 	return result, nil
 }
@@ -297,11 +294,13 @@ func (i *IndexManager) SearchShard(ctx context.Context, shard Shard, x []float32
 
 	result = SearchResult{
 		Shard: shard,
+
+		ToRoute: false,
 	}
 
-	val, ok := i.engineStore.Load(shard.ShardKey())
+	val, ok := i.engineStore.Load(shard.UniqueShardKey())
 	if !ok {
-		log.Error("get shard not found")
+		log.Debug("get shard not found")
 		result.Error = config.ErrShardNotFound
 		return result, config.ErrShardNotFound
 	}
@@ -393,7 +392,7 @@ func (i *IndexManager) SyncCluster(ctx context.Context) {
 					i.deleteIndex(ctx, manifest.Meta.Name)
 				}
 				if event.IsModify() {
-					log.Warn("modify a loaded index is nor current supported and coming soon!")
+					log.Warn("modify a loaded index is not current supported and coming soon!")
 				}
 			}
 		}
@@ -438,7 +437,7 @@ func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
 		shards := manifest.GenerateShards()
 		for _, shard := range shards {
 			needLoad := clusterManager.NeedLoad(shard.ShardKey())
-			val, loaded := i.engineStore.Load(shard.ShardKey())
+			val, loaded := i.engineStore.Load(shard.UniqueShardKey())
 			if needLoad && !loaded {
 				totalShard += 1
 				index, err := NewIndex(ctx, manifest, shard)
@@ -451,14 +450,14 @@ func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
 					i.markShardPending(ctx, shard)
 					continue
 				}
-				i.engineStore.Store(shard.ShardKey(), index)
+				i.engineStore.Store(shard.UniqueShardKey(), index)
 				successShard += 1
 			}
 			if !needLoad && loaded {
 				deletedShard += 1
 				index, _ := val.(Index)
 				index.Delete()
-				i.engineStore.Delete(shard.ShardKey())
+				i.engineStore.Delete(shard.UniqueShardKey())
 			}
 		}
 		return true

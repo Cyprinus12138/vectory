@@ -171,6 +171,10 @@ func (f *FaissIndex) Meta() IndexMeta {
 	return f.manifest.Meta
 }
 
+func (f *FaissIndex) Shard() *Shard {
+	return &f.shard
+}
+
 func (f *FaissIndex) startReload(setting ReloadSetting) (err error) {
 	if setting.Mode == Passive {
 		return nil
