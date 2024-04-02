@@ -14,9 +14,13 @@ import (
 
 	"github.com/serialx/hashring"
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 )
 
-const defaultRegisterTimeoutMs = 5000
+const (
+	defaultRegisterTimeoutMs = 5000
+	initialWeight            = 1000
+)
 
 var manager *EtcdManager
 
@@ -27,10 +31,11 @@ type EtcdManager struct {
 	nodeId         string
 	keepaliveLease *etcd.LeaseGrantResponse
 
-	attachedLoad bool
-	// TODO Add mutex to protect the ring.
+	// attachedLoad indicates whether already reporting the loads.
+	attachedLoad    bool
 	clusterHashRing *hashring.HashRing
 	nodeMateMap     sync.Map // Key: nodeId Value: NodeMeta
+	rebalanceHook   func(ctx context.Context) error
 }
 
 type NodeMeta struct {
@@ -40,12 +45,36 @@ type NodeMeta struct {
 }
 
 type NodeLoad struct {
-	CPU float64 `json:"CPU"`
+	CPU     float64 `json:"cpu"`
+	MemFree uint64  `json:"mem_free"`
 }
 
 type Routing struct {
 	Node *NodeMeta
 	Load *NodeLoad
+}
+
+func (r *Routing) Weight() uint32 {
+	if r.Node == nil || r.Node.Addr == "" {
+		return 0
+	}
+
+	var weight uint32 = initialWeight
+	if r.Load != nil && r.Load.CPU != 0 {
+		weight = uint32((1 - r.Load.CPU) * float64(weight))
+	}
+	switch r.Node.Status {
+	case pkg.Healthy:
+		return weight
+	case pkg.Rebalancing:
+	case pkg.Unhealthy:
+		return uint32(float32(weight) * 0.1)
+	case pkg.Init:
+	case pkg.Inactive:
+	case pkg.Start:
+		return 0
+	}
+	return 0
 }
 
 func InitEtcdManager(ctx context.Context, e *etcd.Client, conf *config.ClusterMetaConfig, nodeId string) {
@@ -136,8 +165,19 @@ func (e *EtcdManager) Unregister() {
 }
 
 // ReportLoad will update the load information of the node to the EtCD regularly.
-func (e *EtcdManager) ReportLoad() {
+func (e *EtcdManager) ReportLoad(policy config.LBModeType) {
 	if e.attachedLoad {
+		return
+	}
+	var (
+		reportCPU, reportMEM bool
+	)
+	switch policy.Standard() {
+	case config.LBCPU:
+		reportCPU = true
+		reportMEM = true
+	case config.LBNone:
+	default:
 		return
 	}
 	key := config.GetNodeLoadPath(e.nodeId)
@@ -146,11 +186,6 @@ func (e *EtcdManager) ReportLoad() {
 	go func(key string) {
 		for {
 			load := &NodeLoad{}
-			usage, err := cpu.Percent(time.Duration(5)*time.Second, false) // There's a sleep logic inside the Percent method.
-			if err != nil || len(usage) <= 0 {
-				logger.Error("attach load get CPU usage failed", logger.Err(err))
-				continue
-			}
 			ctx, cancel := context.WithTimeout(e.ctx, defaultRegisterTimeoutMs*time.Millisecond)
 			response, err := e.etcd.Get(ctx, key, etcd.WithLimit(1))
 			if err != nil {
@@ -166,8 +201,23 @@ func (e *EtcdManager) ReportLoad() {
 				logger.Error("attach load decode registered node load not found", logger.Err(err))
 				continue
 			}
+			if reportCPU {
+				cpuUsage, err := cpu.Percent(time.Duration(5)*time.Second, false) // There's a sleep logic inside the Percent method.
+				if err != nil || len(cpuUsage) <= 0 {
+					logger.Error("attach load get CPU usage failed", logger.Err(err))
+					continue
+				}
+				load.CPU = cpuUsage[0]
+			}
+			if reportMEM {
+				memStat, err := mem.VirtualMemory()
+				if err != nil {
+					logger.Error("attach load get MEM free failed", logger.Err(err))
+					continue
+				}
+				load.MemFree = memStat.Available
+			}
 
-			load.CPU = usage[0]
 			metaStr, _ := json.Marshal(load)
 
 			txn := e.etcd.Txn(ctx)
@@ -251,14 +301,28 @@ func (e *EtcdManager) SyncCluster() error {
 				if event.IsCreate() {
 					e.clusterHashRing.AddNode(meta.NodeId)
 					e.nodeMateMap.Store(meta.NodeId, meta)
+					err = e.rebalanceHook(e.ctx)
+					if err != nil {
+						logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+					}
 				}
 				if event.Type == mvccpb.DELETE {
 					e.nodeMateMap.Delete(meta.NodeId)
 					e.clusterHashRing.RemoveNode(meta.NodeId)
+					err = e.rebalanceHook(e.ctx)
+					if err != nil {
+						logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+					}
 				}
-				if event.IsModify() && meta.Status == pkg.Inactive {
-					e.clusterHashRing.RemoveNode(meta.NodeId)
+				if event.IsModify() {
 					e.nodeMateMap.Store(meta.NodeId, meta)
+					if meta.Status == pkg.Inactive {
+						e.clusterHashRing.RemoveNode(meta.NodeId)
+						err = e.rebalanceHook(e.ctx)
+						if err != nil {
+							logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+						}
+					}
 				}
 			}
 		}
@@ -339,7 +403,6 @@ func (e *EtcdManager) getLoad(ctx context.Context, nodeId string) (load *NodeLoa
 		return nil, err
 	}
 	return load, nil
-
 }
 
 func (e *EtcdManager) Route(ctx context.Context, key string) (routing *Routing, err error) {
@@ -349,16 +412,20 @@ func (e *EtcdManager) Route(ctx context.Context, key string) (routing *Routing, 
 		log.Error("getNode failed", logger.Err(err))
 		return nil, err
 	}
-	load := &NodeLoad{}
+	routing = &Routing{
+		Node: node,
+	}
+
 	if e.attachedLoad {
-		load, err = e.getLoad(ctx, node.NodeId)
+		routing.Load, err = e.getLoad(ctx, node.NodeId)
 		if err != nil {
 			log.Error("getLoad failed", logger.Err(err))
-			return nil, err
+			return routing, err
 		}
 	}
-	return &Routing{
-		Node: node,
-		Load: load,
-	}, nil
+	return routing, nil
+}
+
+func (e *EtcdManager) SetRebalanceHook(f func(ctx context.Context) error) {
+	e.rebalanceHook = f
 }

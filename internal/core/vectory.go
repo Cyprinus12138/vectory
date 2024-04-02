@@ -123,7 +123,7 @@ func (a *Vectory) Start() error {
 			logger.String("instanceId", a.id),
 			logger.String("gracePeriodDuration", fmt.Sprintf("%d s", a.conf.ClusterMode.GracePeriod)),
 		)
-		manager.ReportLoad() // TODO Add toggle in the config to determine whether use the load as the routing weight.
+		manager.ReportLoad(a.conf.ClusterMode.LBMode)
 
 		// For cluster mode, a grace period is introduced, to wait all instance come online, avoiding rebalancing too
 		// frequently at the staging period.

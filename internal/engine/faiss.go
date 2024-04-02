@@ -193,9 +193,7 @@ func (f *FaissIndex) startReload(setting ReloadSetting) (err error) {
 			return config.ErrInvalidScheduleType
 		}
 
-		scheduler.Start()
-
-		f.reloadEntry, err = scheduler.AddFunc(cronStr, func() {
+		f.reloadEntry, err = GetScheduler().AddFunc(cronStr, func() {
 			err := f.Reload(context.Background())
 			if err != nil {
 				logger.Error("reload failed", logger.Err(err))

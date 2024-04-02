@@ -35,6 +35,7 @@ type IndexManager struct {
 	engineStore    *sync.Map // Key: shardKey Value: Index
 	indexManifests *sync.Map // Key: indexName Value: *IndexManifest
 	pendingShards  *sync.Map // Key: Shard Value: bool (dummy true)
+	listeners      *sync.Map // Key: Target(uniqueShardKey) Value: Listener
 	mode           Mode
 
 	etcd *etcd.Client
@@ -48,6 +49,7 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 		engineStore:    &sync.Map{},
 		indexManifests: &sync.Map{},
 		pendingShards:  &sync.Map{},
+		listeners:      &sync.Map{},
 	}
 	log := logger.DefaultLoggerWithCtx(ctx)
 	var (
@@ -87,6 +89,9 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 			total += idxTotalShard
 			idxSuccessShard += successShard
 		}
+
+		// Provide a way for cluster manager to trigger the rebalance process.
+		cluster.GetManger().SetRebalanceHook(manger.Rebalance)
 	} else {
 		manger.mode = Single
 		indexFiles, err := os.ReadDir(config.GetLocalIndexRootPath())
@@ -346,7 +351,7 @@ func (i *IndexManager) SyncCluster(ctx context.Context) {
 	go func(ctx context.Context) {
 		log := logger.DefaultLoggerWithCtx(ctx)
 
-		watch := i.etcd.Watch(ctx, config.GetNodeMetaPathPrefix(), etcd.WithPrefix())
+		watch := i.etcd.Watch(ctx, config.GetIndexManifestPathPrefix(), etcd.WithPrefix())
 		var watchResp etcd.WatchResponse
 		select {
 		case watchResp = <-watch:
@@ -399,7 +404,11 @@ func (i *IndexManager) SyncCluster(ctx context.Context) {
 	}(ctx)
 }
 
+// Rebalance should be executed when there is change on the distribution of the shard among the nodes.
+// Add new node or remove existing node from the cluster should trigger this process.
 func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
+	defer i.notifyListeners()
+
 	log := logger.DefaultLoggerWithCtx(ctx)
 	var totalShard, successShard, deletedShard int
 	pkg.SetStatus(pkg.Rebalancing)
@@ -479,4 +488,50 @@ func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
 		)
 	}
 	return nil
+}
+
+func (i *IndexManager) ResolveUniqueShard(uShardKey *Shard) (nodes []*cluster.Routing, err error) {
+	v, ok := i.indexManifests.Load(uShardKey.IndexName)
+	if !ok {
+		logger.Error("no such index loaded", logger.String("indexName", uShardKey.IndexName))
+		return nil, config.ErrResolveIndexShard
+	}
+
+	manifest, ok := v.(*IndexManifest)
+	if !ok {
+		logger.Error("assert to IndexManifest failed", logger.Interface("manifest", manifest))
+		return nil, config.ErrResolveIndexShard
+	}
+
+	clusterManager := cluster.GetManger()
+	replicas := uShardKey.GenerateReplicaKeys(int(manifest.Meta.Replicas))
+	for _, replica := range replicas {
+		routing, err := clusterManager.Route(context.Background(), replica)
+		if err != nil {
+			logger.Error("route replica failed", logger.Err(err))
+			continue
+		}
+		nodes = append(nodes, routing)
+	}
+	return nodes, err
+}
+
+// notifyListeners will trigger a ResolverNow action immediately for all existing resolvers (aka Listener here).
+func (i *IndexManager) notifyListeners() {
+	i.listeners.Range(func(key, value any) bool {
+		listener, ok := value.(Listener)
+		if !ok {
+			return true
+		}
+		listener.Update()
+		return true
+	})
+}
+
+func (i *IndexManager) UnregisterListener(key string) {
+	i.listeners.Delete(key)
+}
+
+func (i *IndexManager) RegisterListener(key string, listener Listener) {
+	i.listeners.Store(key, listener)
 }

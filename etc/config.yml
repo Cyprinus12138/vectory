@@ -16,6 +16,7 @@ cluster:
       - "http://192.168.100.108:30002"
       - "http://192.168.100.108:30003"
     ttl: 5
+    lb_mode: "none"
   admin:
     enable_metrics: true
     enable_pprof: true

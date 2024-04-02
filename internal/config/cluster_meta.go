@@ -1,6 +1,20 @@
 package config
 
-import "github.com/Cyprinus12138/vectory/internal/utils/config_manager"
+import (
+	"github.com/Cyprinus12138/vectory/internal/utils/config_manager"
+	"strings"
+)
+
+type LBModeType string
+
+func (l *LBModeType) Standard() LBModeType {
+	return LBModeType(strings.ToLower(string(*l)))
+}
+
+const (
+	LBNone LBModeType = "none"
+	LBCPU  LBModeType = "cpu"
+)
 
 type ClusterMetaConfig struct {
 	ClusterName string             `json:"cluster_name" yaml:"cluster_name"`
@@ -10,10 +24,11 @@ type ClusterMetaConfig struct {
 }
 
 type ClusterSetting struct {
-	Enabled     bool     `json:"enabled" yaml:"enabled"`
-	GracePeriod int      `json:"grace_period" yaml:"grace_period"`
-	Endpoints   []string `json:"endpoints" yaml:"etcd_endpoints"`
-	Ttl         int64    `json:"ttl" yaml:"ttl"`
+	Enabled     bool       `json:"enabled" yaml:"enabled"`
+	GracePeriod int        `json:"grace_period" yaml:"grace_period"`
+	Endpoints   []string   `json:"endpoints" yaml:"etcd_endpoints"`
+	Ttl         int64      `json:"ttl" yaml:"ttl"`
+	LBMode      LBModeType `json:"lb_mode" yaml:"lb_mode"`
 }
 
 type ServiceAdminConfig struct {

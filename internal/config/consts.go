@@ -43,4 +43,6 @@ var (
 	ErrGetManifestsFailed     = errors.New("get manifest failed")
 	ErrUnmarshal              = errors.New("unmarshal failed")
 	ErrManifestValidateFailed = errors.New("invalid index manifest")
+	ErrResolveIndexShard      = errors.New("cannot resolve shardKey")
+	ErrResolveNoAvailableNode = errors.New("no available node resolved")
 )

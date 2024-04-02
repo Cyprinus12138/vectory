@@ -6,9 +6,19 @@ import (
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/robfig/cron/v3"
+	"strconv"
+	"strings"
 )
 
 var scheduler = cron.New()
+
+func GetScheduler() *cron.Cron {
+	return scheduler
+}
+
+func init() {
+	GetScheduler().Start()
+}
 
 var metricType = map[int]string{
 	0: "INNER_PRODUCT", //< maximum inner product search
@@ -26,8 +36,9 @@ var metricType = map[int]string{
 }
 
 const (
-	shardKeyFmt          = "%s_%d_%d"
-	shardKeyWoReplicaFmt = "%s_%d"
+	shardKeyFmt          = "%s:%d:%d" // {indexName}:{shardId}:{replicaId}
+	shardKeyWoReplicaFmt = "%s:%d"    // {indexName}:{shardId}
+	shardKeySep          = ":"
 )
 
 type IndexType string
@@ -142,6 +153,42 @@ func (s *Shard) UniqueShardKey() string {
 	return fmt.Sprintf(shardKeyWoReplicaFmt, s.IndexName, s.ShardId)
 }
 
+func (s *Shard) FromString(key string) {
+	parts := strings.Split(key, shardKeySep)
+	switch len(parts) {
+	case 1:
+		s.IndexName = parts[0]
+	case 2:
+		if shardId, ok := strconv.Atoi(parts[1]); ok == nil {
+			s.IndexName = parts[0]
+			s.ShardId = int32(shardId)
+		}
+	case 3:
+		shardId, ok1 := strconv.Atoi(parts[1])
+		repId, ok2 := strconv.Atoi(parts[2])
+		if ok1 == nil && ok2 == nil {
+			s.IndexName = parts[0]
+			s.ShardId = int32(shardId)
+			s.ReplicaId = int32(repId)
+		}
+	}
+}
+
+func (s *Shard) GenerateReplicaKeys(replicas int) []string {
+	if !s.Valid() {
+		return nil
+	}
+	result := make([]string, replicas)
+	for i := 0; i < replicas; i++ {
+		result[i] = fmt.Sprintf(shardKeyFmt, s.IndexName, s.ShardId, i)
+	}
+	return result
+}
+
+func (s *Shard) Valid() bool {
+	return s.IndexName != ""
+}
+
 func (m *IndexManifest) GenerateShards() []Shard {
 	meta := m.Meta
 	result := make([]Shard, 0, meta.Shards*meta.Replicas)
@@ -221,8 +268,4 @@ func NewIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (Index,
 		)
 		return nil, config.ErrInvalidIndexType
 	}
-}
-
-func GetShardKey(idx IndexManifest, shard Shard) string {
-	return fmt.Sprintf(shardKeyFmt, idx.Meta.Name, shard.ShardId, shard.ReplicaId)
 }
