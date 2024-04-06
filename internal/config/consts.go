@@ -20,6 +20,7 @@ const (
 	FmtEtcdSvcPath         = "svc/%s"
 	FmtEtcdSvcRegisterPath = "svc/%s/%s"
 	FmtEtcdSvcResolveFmt   = "etcd:///svc/%s"
+	FmtUrlForResolver      = "%s://%s"
 )
 
 var (

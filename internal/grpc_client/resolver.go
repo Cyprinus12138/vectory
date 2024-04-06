@@ -12,7 +12,7 @@ import (
 
 const (
 	// Define a unique scheme for your resolver.
-	ResolverScheme = "vectory"
+	ShardResolverScheme = "vec-idx"
 
 	// Define a fixed address for demonstration purposes.
 	// In a real-world scenario, you would dynamically determine the address.
@@ -29,10 +29,14 @@ func init() {
 	GetScheduler().Start()
 }
 
-// vectoryResolverBuilder implements the resolver.Builder interface.
-type vectoryResolverBuilder struct{}
+// ShardResolverBuilder implements the resolver.Builder interface.
+type ShardResolverBuilder struct{}
 
-func (*vectoryResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func NewShardResolverBuilder() *ShardResolverBuilder {
+	return &ShardResolverBuilder{}
+}
+
+func (*ShardResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &vectoryResolver{
 		target: target,
 		cc:     cc,
@@ -42,8 +46,8 @@ func (*vectoryResolverBuilder) Build(target resolver.Target, cc resolver.ClientC
 	return r, nil
 }
 
-func (*vectoryResolverBuilder) Scheme() string {
-	return ResolverScheme
+func (*ShardResolverBuilder) Scheme() string {
+	return ShardResolverScheme
 }
 
 // vectoryResolver implements the resolver.Resolver interface.

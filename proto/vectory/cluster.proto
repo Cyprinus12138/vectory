@@ -10,12 +10,12 @@ service Cluster {
 message SearchShardRequest {
   RequestHeader header = 1;
   string shard_key = 2;
-  repeated Vector input = 3;
+  Vector input = 3;
   int32 limit = 4;
 
 }
 
 message SearchShardResponse{
   ResponseHeader header = 1;
-  repeated SearchResult results = 2;
+  SearchResult result = 2;
 }

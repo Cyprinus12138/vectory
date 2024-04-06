@@ -1,77 +1,56 @@
 package grpc_client
 
 import (
+	"context"
 	"fmt"
 	"github.com/Cyprinus12138/vectory/internal/config"
+	"github.com/Cyprinus12138/vectory/internal/engine"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
-	etcd "go.etcd.io/etcd/client/v3"
+	pb "github.com/Cyprinus12138/vectory/proto/gen/go"
 	"google.golang.org/grpc"
+	wrr "google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	gr "google.golang.org/grpc/resolver"
+	"sync"
 )
 
 var (
-// Add your grpc client here
+	shardConnMap sync.Map
 )
 
-func Init(e *etcd.Client) error {
-	/* Init resolver here.
-	etcdResolver, err := resolver.NewBuilder(e)
-	if err != nil {
-		return err
-	}
-	*/
-	/* Call your client init method here
-	err = initAccount(etcdResolver)
-	if err != nil {
-		return err
-	}
-	*/
-	return nil
+func init() {
+	shardConnMap = sync.Map{} // shardConnMap key: uniqueShardKey value: *grpc.ClientConn
 }
 
-// connectToServer Should be called inside client init method.
-func connectToServer(r gr.Builder, svcName string) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(
-		fmt.Sprintf(config.FmtEtcdSvcResolveFmt, svcName),
-		grpc.WithResolvers(r),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		return nil, err
+func GetShardClient(ctx context.Context, shard engine.Shard) (cli pb.ClusterClient, err error) {
+	shardKey := shard.UniqueShardKey()
+	var conn *grpc.ClientConn
+	connRaw, ok := shardConnMap.Load(shardKey)
+	if ok {
+		conn, ok = connRaw.(*grpc.ClientConn)
 	}
-	logger.Info(
-		"connect to server",
-		logger.String("service", svcName),
-		logger.String("target", conn.Target()),
-		logger.String("state", conn.GetState().String()),
-	)
-	return conn, nil
-}
 
-/* Add your init method and getter here
-func initAccount(r gr.Builder) (err error) {
-	conn, err := connectToServer(r, ap.ClusterName)
-	if err != nil {
-		return err
+	if !ok || conn.GetState() == connectivity.Shutdown {
+		url := fmt.Sprintf(config.FmtUrlForResolver, ShardResolverScheme, shardKey)
+		builder := NewShardResolverBuilder()
+		conn, err = grpc.Dial(
+			url,
+			grpc.WithResolvers(builder),
+			grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"`+wrr.Name+`"}`),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+		if err != nil {
+			logger.CtxError(
+				ctx,
+				"connect to node by shard failed",
+				logger.String("shardKey", shardKey),
+				logger.String("url", url),
+				logger.Err(err),
+			)
+			return nil, err
+		}
+		shardConnMap.Store(shardKey, conn)
 	}
-	logger.Info(
-		"connect to server",
-		logger.String("service", ap.ClusterName),
-		logger.String("target", conn.Target()),
-		logger.String("state", conn.GetState().String()),
-	)
-	accountClient = ac.NewAccountClient(conn)
-	return nil
+
+	return pb.NewClusterClient(conn), nil
 }
-
-
-func GetAccountClient(ctx context.Context) ac.AccountClient {
-	if accountClient == nil {
-		logger.CtxWarn(ctx, "client not init", logger.String("svc", ap.ClusterName))
-	}
-	return accountClient
-}
-
-*/

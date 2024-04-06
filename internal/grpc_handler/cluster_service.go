@@ -2,6 +2,7 @@ package grpc_handler
 
 import (
 	"context"
+	"github.com/Cyprinus12138/vectory/internal/processor"
 	pb "github.com/Cyprinus12138/vectory/proto/gen/go"
 	"google.golang.org/grpc"
 )
@@ -19,6 +20,6 @@ func NewClusterService() *ClusterService {
 }
 
 func (s *ClusterService) SearchShard(ctx context.Context, request *pb.SearchShardRequest) (*pb.SearchShardResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	proc := processor.SearchShardProcessor{}
+	return proc.Handle(ctx, request)
 }

@@ -298,8 +298,7 @@ func (i *IndexManager) SearchShard(ctx context.Context, shard Shard, x []float32
 	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("shard", shard.ShardKey()))
 
 	result = SearchResult{
-		Shard: shard,
-
+		Shard:   shard,
 		ToRoute: false,
 	}
 
