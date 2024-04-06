@@ -503,6 +503,16 @@ func (i *IndexManager) ResolveUniqueShard(uShardKey *Shard) (nodes []*cluster.Ro
 		return nil, config.ErrResolveIndexShard
 	}
 
+	if uShardKey.ShardId >= manifest.Meta.Shards {
+		logger.Error(
+			"no such shard",
+			logger.String("indexName", uShardKey.IndexName),
+			logger.Int32("desireShardId", uShardKey.ShardId),
+			logger.Int32("shardNums", manifest.Meta.Shards),
+		)
+		return nil, config.ErrResolveIndexShard
+	}
+
 	clusterManager := cluster.GetManger()
 	replicas := uShardKey.GenerateReplicaKeys(int(manifest.Meta.Replicas))
 	for _, replica := range replicas {

@@ -4,6 +4,6 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
 export PATH="$PATH:$(go env GOPATH)/bin"
 
 echo "Generating pb"
-protoc --go_out=proto   \
-    --go-grpc_out=proto  \
+protoc --go_out=proto/gen/go   \
+    --go-grpc_out=proto/gen/go  \
     proto/vectory/*.proto

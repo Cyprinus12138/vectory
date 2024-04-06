@@ -45,4 +45,5 @@ var (
 	ErrManifestValidateFailed = errors.New("invalid index manifest")
 	ErrResolveIndexShard      = errors.New("cannot resolve shardKey")
 	ErrResolveNoAvailableNode = errors.New("no available node resolved")
+	ErrBadRequest             = errors.New("invalid request body")
 )

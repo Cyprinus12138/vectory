@@ -1,0 +1,21 @@
+syntax = "proto3";
+option go_package = ".";
+import "proto/vectory/common.proto";
+
+service Cluster {
+  rpc SearchShard(SearchShardRequest) returns (SearchShardResponse){}
+
+}
+
+message SearchShardRequest {
+  RequestHeader header = 1;
+  string shard_key = 2;
+  repeated Vector input = 3;
+  int32 limit = 4;
+
+}
+
+message SearchShardResponse{
+  ResponseHeader header = 1;
+  repeated SearchResult results = 2;
+}

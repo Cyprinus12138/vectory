@@ -25,6 +25,10 @@ func Int(key string, val int) zap.Field {
 	return zap.Int(key, val)
 }
 
+func Int32(key string, val int32) zap.Field {
+	return zap.Int32(key, val)
+}
+
 func Int64(key string, val int64) zap.Field {
 	return zap.Int64(key, val)
 }
