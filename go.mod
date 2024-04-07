@@ -2,7 +2,7 @@ module github.com/Cyprinus12138/vectory
 
 go 1.20
 
-replace github.com/spf13/viper v1.15.0 => github.com/Cyprinus12138/viper v0.0.1
+replace github.com/spf13/viper v1.15.0 => github.com/Cyprinus12138/viper v0.0.3-0.20240407071829-ff31033cbb38
 
 replace github.com/spf13/viper/remote v1.15.0 => github.com/Cyprinus12138/viper/remote v0.0.1
 

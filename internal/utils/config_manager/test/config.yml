@@ -1,0 +1,45 @@
+config_manager:
+  enable_remote: false
+  remote:
+    - provider: "etcd3" # "etcd", "etcd3", "consul" or "firestore"
+      endpoint: "http://192.168.100.108:30001;http://192.168.100.108:30002;http://192.168.100.108:30003"
+      path: "/example"
+
+cluster:
+  cluster_name: "example"
+  grpc_enabled: true
+  cluster_mode:
+    enabled: true
+    grace_period: 15
+    endpoints:
+      - "http://192.168.100.108:30001"
+      - "http://192.168.100.108:30002"
+      - "http://192.168.100.108:30003"
+    ttl: 5
+    lb_mode: "none"
+  admin:
+    enable_metrics: true
+    enable_pprof: true
+    health_check_endpoint: "/health_check"
+
+cluster_invalid_type:
+  cluster_name: 4566544565456
+  grpc_enabled: "should be bool"
+  int_type_content: "awdawdwad"
+
+
+# For local debug only, should not be used in a ConfigMap.
+env:
+  PORT: 6060
+  RPC_PORT: 8999
+  POD_IP: 127.0.0.1
+
+logger:
+  level: "debug"
+  default_path: "./log/data.log"
+  level_path:
+    debug: "./log/data.log"
+    info: "./log/info.log"
+    warn: "./log/warn.log"
+    error: "./log/error.log"
+    fatal: "./log/fatal.log"

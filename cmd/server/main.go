@@ -32,11 +32,6 @@ func init() {
 			Key:      config.ConfKeyEnv,
 			CanBeNil: true,
 		},
-		{
-			Key:      config_manager.MetaConfigKey,
-			Schema:   &config_manager.MetaConfig{},
-			CanBeNil: false,
-		},
 	})
 	if err != nil {
 		panic(errors.WithMessage(err, "config init failed"))
@@ -62,6 +57,7 @@ func main() {
 		panic(err)
 	}
 }
+
 func exitWhenNotified() {
 	terminateSignals := make(chan os.Signal, 1)
 	signal.Notify(terminateSignals, syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM) //NOTE:: syscall.SIGKILL we cannot catch kill -9 as its force kill signal.

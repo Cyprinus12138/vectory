@@ -30,10 +30,15 @@ func Init(cfgPath string, configSchema []viper.RegisteredConfig) (err error) {
 	cfg = &configManager{
 		localViper: viper.New(),
 	}
+	configSchema = append(configSchema, viper.RegisteredConfig{
+		Key:      MetaConfigKey,
+		Schema:   &MetaConfig{},
+		CanBeNil: false,
+	})
 	cfg.localViper.SetName("local")
 	cfg.localViper.SetConfigFile(cfgPath)
 	cfg.localViper.Register(configSchema)
-	err = cfg.localViper.ReadInConfig()
+	err = cfg.localViper.ReadInConfig(true)
 	if err != nil {
 		return err
 	}

@@ -66,12 +66,9 @@ func (r *Routing) Weight() uint32 {
 	switch r.Node.Status {
 	case pkg.Healthy:
 		return weight
-	case pkg.Rebalancing:
-	case pkg.Unhealthy:
+	case pkg.Rebalancing, pkg.Unhealthy:
 		return uint32(float32(weight) * 0.1)
-	case pkg.Init:
-	case pkg.Inactive:
-	case pkg.Start:
+	case pkg.Init, pkg.Inactive, pkg.Start:
 		return 0
 	}
 	return 0
@@ -176,31 +173,15 @@ func (e *EtcdManager) ReportLoad(policy config.LBModeType) {
 	case config.LBCPU:
 		reportCPU = true
 		reportMEM = true
-	case config.LBNone:
 	default:
 		return
 	}
 	key := config.GetNodeLoadPath(e.nodeId)
 	e.attachedLoad = true
 
-	go func(key string) {
+	go func(key string, reportCPU, reportMEM bool) {
 		for {
 			load := &NodeLoad{}
-			ctx, cancel := context.WithTimeout(e.ctx, defaultRegisterTimeoutMs*time.Millisecond)
-			response, err := e.etcd.Get(ctx, key, etcd.WithLimit(1))
-			if err != nil {
-				logger.Error("attach load get registered node load failed", logger.Err(err))
-				continue
-			}
-			if len(response.Kvs) <= 0 {
-				logger.Error("attach load get registered node load not found", logger.Err(err))
-				continue
-			}
-			err = json.Unmarshal(response.Kvs[0].Value, load)
-			if err != nil {
-				logger.Error("attach load decode registered node load not found", logger.Err(err))
-				continue
-			}
 			if reportCPU {
 				cpuUsage, err := cpu.Percent(time.Duration(5)*time.Second, false) // There's a sleep logic inside the Percent method.
 				if err != nil || len(cpuUsage) <= 0 {
@@ -217,22 +198,17 @@ func (e *EtcdManager) ReportLoad(policy config.LBModeType) {
 				}
 				load.MemFree = memStat.Available
 			}
-
 			metaStr, _ := json.Marshal(load)
 
-			txn := e.etcd.Txn(ctx)
-			_, err = txn.If(
-				etcd.Compare(etcd.ModRevision(key), "=", response.Kvs[0].ModRevision),
-			).Then(
-				etcd.OpPut(key, string(metaStr), etcd.WithLease(e.keepaliveLease.ID)),
-			).Commit()
+			ctx, cancel := context.WithTimeout(e.ctx, defaultRegisterTimeoutMs*time.Millisecond)
+			_, err := e.etcd.Put(ctx, key, string(metaStr), etcd.WithLease(e.keepaliveLease.ID))
 			cancel()
 			if err != nil {
 				logger.Error("attach load put registered node load failed", logger.Err(err))
 				continue
 			}
 		}
-	}(key)
+	}(key, reportCPU, reportMEM)
 }
 
 func (e *EtcdManager) setNodeStatus(ctx context.Context, status pkg.NodeStatus) {
@@ -368,15 +344,12 @@ func (e *EtcdManager) getNode(ctx context.Context, key string) (node *NodeMeta, 
 	}
 
 	switch node.Status {
-	case pkg.Init:
-	case pkg.Start:
-	case pkg.Inactive:
+	case pkg.Init, pkg.Start, pkg.Inactive:
 		log.Warn("node is not available but not healthy", logger.String("status", node.Status.ToString()))
 		return nil, config.ErrNodeNotAvailable
 	case pkg.Healthy:
 		return node, nil
-	case pkg.Rebalancing:
-	case pkg.Unhealthy:
+	case pkg.Rebalancing, pkg.Unhealthy:
 		log.Warn("node is available but not healthy", logger.String("status", node.Status.ToString()))
 		return node, nil
 	}

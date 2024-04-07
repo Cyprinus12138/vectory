@@ -50,8 +50,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/Cyprinus12138/otelgin v1.0.0 h1:i/+Yc6mtMM7B+ScaG4fj2A8daJeSigm3peYq06x/AI0=
 github.com/Cyprinus12138/otelgin v1.0.0/go.mod h1:2awev+K126GKnxin/XulKzV+/6nlW++xMHhPPTY2zX0=
-github.com/Cyprinus12138/viper v0.0.1 h1:iNUaOKnLlYYdXBlbWxA4DII6ie2ncxIDW95hBw0pmds=
-github.com/Cyprinus12138/viper v0.0.1/go.mod h1:fFcTBJxvhhzSJiZy8n+PeW6t8l+KeT/uTARa0jHOQLA=
+github.com/Cyprinus12138/viper v0.0.3-0.20240407071829-ff31033cbb38 h1:lXYZM68yfS9xHjMP8vkCepPzXQ64yGSTWgcjeUrZNYk=
+github.com/Cyprinus12138/viper v0.0.3-0.20240407071829-ff31033cbb38/go.mod h1:fFcTBJxvhhzSJiZy8n+PeW6t8l+KeT/uTARa0jHOQLA=
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/DataIntelligenceCrew/go-faiss v0.2.0 h1:c0pxAr0vldXIuE4DZnqpl6FuuH1uZd45d+NiQHKg1uU=
 github.com/DataIntelligenceCrew/go-faiss v0.2.0/go.mod h1:4Gi7G3PF78IwZigTL2M1AJXOaAgxyL66vCqUYVaNgwk=

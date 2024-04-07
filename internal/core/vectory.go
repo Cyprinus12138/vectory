@@ -79,7 +79,6 @@ func (a *Vectory) Setup(ctx context.Context) (err error) {
 			logger.Error("error when build etcd client", logger.Err(err))
 			return err
 		}
-
 		grpc_handler.SetupClusterService(a.gRpcService)
 
 	}
