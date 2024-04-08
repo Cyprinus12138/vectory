@@ -181,31 +181,36 @@ func (e *EtcdManager) ReportLoad(policy config.LBModeType) {
 
 	go func(key string, reportCPU, reportMEM bool) {
 		for {
-			load := &NodeLoad{}
-			if reportCPU {
-				cpuUsage, err := cpu.Percent(time.Duration(5)*time.Second, false) // There's a sleep logic inside the Percent method.
-				if err != nil || len(cpuUsage) <= 0 {
-					logger.Error("attach load get CPU usage failed", logger.Err(err))
-					continue
+			select {
+			case <-e.ctx.Done():
+				return
+			default:
+				load := &NodeLoad{}
+				if reportCPU {
+					cpuUsage, err := cpu.Percent(time.Duration(5)*time.Second, false) // There's a sleep logic inside the Percent method.
+					if err != nil || len(cpuUsage) <= 0 {
+						logger.Error("attach load get CPU usage failed", logger.Err(err))
+						continue
+					}
+					load.CPU = cpuUsage[0]
 				}
-				load.CPU = cpuUsage[0]
-			}
-			if reportMEM {
-				memStat, err := mem.VirtualMemory()
-				if err != nil {
-					logger.Error("attach load get MEM free failed", logger.Err(err))
-					continue
+				if reportMEM {
+					memStat, err := mem.VirtualMemory()
+					if err != nil {
+						logger.Error("attach load get MEM free failed", logger.Err(err))
+						continue
+					}
+					load.MemFree = memStat.Available
 				}
-				load.MemFree = memStat.Available
-			}
-			metaStr, _ := json.Marshal(load)
+				metaStr, _ := json.Marshal(load)
 
-			ctx, cancel := context.WithTimeout(e.ctx, defaultRegisterTimeoutMs*time.Millisecond)
-			_, err := e.etcd.Put(ctx, key, string(metaStr), etcd.WithLease(e.keepaliveLease.ID))
-			cancel()
-			if err != nil {
-				logger.Error("attach load put registered node load failed", logger.Err(err))
-				continue
+				ctx, cancel := context.WithTimeout(e.ctx, defaultRegisterTimeoutMs*time.Millisecond)
+				_, err := e.etcd.Put(ctx, key, string(metaStr), etcd.WithLease(e.keepaliveLease.ID))
+				cancel()
+				if err != nil {
+					logger.Error("attach load put registered node load failed", logger.Err(err))
+					continue
+				}
 			}
 		}
 	}(key, reportCPU, reportMEM)
@@ -251,52 +256,62 @@ func (e *EtcdManager) SyncCluster() error {
 			continue
 		}
 		nodes = append(nodes, meta.NodeId)
+		logger.Debug("discovered node", logger.String("nodeId", meta.NodeId))
 	}
 
 	e.clusterHashRing = hashring.New(nodes)
 
 	go func() {
 		watch := e.etcd.Watch(e.ctx, config.GetNodeMetaPathPrefix(), etcd.WithPrefix())
-		var watchResp etcd.WatchResponse
-		select {
-		case watchResp = <-watch:
-			if watchResp.Canceled {
-				logger.Fatal("watch cluster canceled",
-					logger.String("clusterName", e.conf.ClusterName),
-					logger.String("instanceId", e.nodeId),
-					logger.Err(watchResp.Err()),
-				)
-				return
-			}
-			for _, event := range watchResp.Events {
-				meta := &NodeMeta{}
-				jErr := json.Unmarshal(event.Kv.Value, meta)
-				if jErr != nil {
-					logger.Error("invalid node meta", logger.String("meta", string(event.Kv.Value)), logger.Err(jErr))
+		for {
+			select {
+			case watchResp := <-watch:
+				if watchResp.Canceled {
+					logger.Fatal("watch cluster canceled",
+						logger.String("clusterName", e.conf.ClusterName),
+						logger.String("instanceId", e.nodeId),
+						logger.Err(watchResp.Err()),
+					)
+					return
 				}
-				if event.IsCreate() {
-					e.clusterHashRing.AddNode(meta.NodeId)
-					e.nodeMateMap.Store(meta.NodeId, meta)
-					err = e.rebalanceHook(e.ctx)
-					if err != nil {
-						logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+				for _, event := range watchResp.Events {
+					meta := &NodeMeta{}
+					jErr := json.Unmarshal(event.Kv.Value, meta)
+					if jErr != nil {
+						logger.Error("invalid node meta", logger.String("meta", string(event.Kv.Value)), logger.Err(jErr))
 					}
-				}
-				if event.Type == mvccpb.DELETE {
-					e.nodeMateMap.Delete(meta.NodeId)
-					e.clusterHashRing.RemoveNode(meta.NodeId)
-					err = e.rebalanceHook(e.ctx)
-					if err != nil {
-						logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+					if event.IsCreate() {
+						e.clusterHashRing = e.clusterHashRing.AddNode(meta.NodeId)
+						logger.Debug("added node", logger.String("nodeId", meta.NodeId), logger.Int("currentSize", e.clusterHashRing.Size()))
+						e.nodeMateMap.Store(meta.NodeId, meta)
+						if e.rebalanceHook != nil {
+							err = e.rebalanceHook(e.ctx)
+							if err != nil {
+								logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+							}
+						}
 					}
-				}
-				if event.IsModify() {
-					e.nodeMateMap.Store(meta.NodeId, meta)
-					if meta.Status == pkg.Inactive {
-						e.clusterHashRing.RemoveNode(meta.NodeId)
-						err = e.rebalanceHook(e.ctx)
-						if err != nil {
-							logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+					if event.Type == mvccpb.DELETE {
+						e.nodeMateMap.Delete(meta.NodeId)
+						logger.Debug("removed node", logger.String("nodeId", meta.NodeId), logger.Int("currentSize", e.clusterHashRing.Size()))
+						e.clusterHashRing = e.clusterHashRing.RemoveNode(meta.NodeId)
+						if e.rebalanceHook != nil {
+							err = e.rebalanceHook(e.ctx)
+							if err != nil {
+								logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+							}
+						}
+					}
+					if event.IsModify() {
+						e.nodeMateMap.Store(meta.NodeId, meta)
+						if meta.Status == pkg.Inactive {
+							e.clusterHashRing = e.clusterHashRing.RemoveNode(meta.NodeId)
+							if e.rebalanceHook != nil {
+								err = e.rebalanceHook(e.ctx)
+								if err != nil {
+									logger.Error("rebalance failed", logger.String("meta", string(event.Kv.Value)), logger.Err(err))
+								}
+							}
 						}
 					}
 				}

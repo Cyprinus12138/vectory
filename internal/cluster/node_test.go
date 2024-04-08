@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"github.com/Cyprinus12138/vectory/internal/config"
+	"github.com/Cyprinus12138/vectory/internal/utils"
 	"github.com/Cyprinus12138/vectory/mocks"
 	"github.com/Cyprinus12138/vectory/pkg"
 	"github.com/pkg/errors"
@@ -65,6 +66,20 @@ func init() {
 	}
 }
 
+func genField() fields {
+	return fields{
+		ctx:    initField.ctx,
+		etcd:   initField.etcd,
+		conf:   initField.conf,
+		nodeId: utils.GenInstanceId("unit-test"),
+		keepaliveLease: &etcd.LeaseGrantResponse{
+			ID:  0,
+			TTL: 0,
+		},
+		nodeMateMap: sync.Map{},
+	}
+}
+
 type fields struct {
 	ctx             context.Context
 	etcd            *etcd.Client
@@ -110,7 +125,6 @@ func TestEtcdManager_NeedLoad(t *testing.T) {
 }
 
 func TestEtcdManager_Register(t *testing.T) {
-
 	type args struct {
 		lis net.Listener
 	}
@@ -123,6 +137,18 @@ func TestEtcdManager_Register(t *testing.T) {
 		{
 			name:    "pass",
 			fields:  initField,
+			args:    args{lis: lis},
+			wantErr: false,
+		},
+		{
+			name:    "pass_1",
+			fields:  genField(),
+			args:    args{lis: lis},
+			wantErr: false,
+		},
+		{
+			name:    "pass_2",
+			fields:  genField(),
 			args:    args{lis: lis},
 			wantErr: false,
 		},
@@ -215,76 +241,6 @@ func TestEtcdManager_ReportLoad(t *testing.T) {
 	}
 }
 
-func TestEtcdManager_Route(t *testing.T) {
-
-	type args struct {
-		ctx context.Context
-		key string
-	}
-	tests := []struct {
-		name        string
-		fields      fields
-		args        args
-		wantRouting *Routing
-		wantErr     bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := &EtcdManager{
-				ctx:             tt.fields.ctx,
-				etcd:            tt.fields.etcd,
-				conf:            tt.fields.conf,
-				nodeId:          tt.fields.nodeId,
-				keepaliveLease:  tt.fields.keepaliveLease,
-				attachedLoad:    tt.fields.attachedLoad,
-				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
-				rebalanceHook:   tt.fields.rebalanceHook,
-			}
-			gotRouting, err := e.Route(tt.args.ctx, tt.args.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Route() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotRouting, tt.wantRouting) {
-				t.Errorf("Route() gotRouting = %v, want %v", gotRouting, tt.wantRouting)
-			}
-		})
-	}
-}
-
-func TestEtcdManager_SetRebalanceHook(t *testing.T) {
-
-	type args struct {
-		f func(ctx context.Context) error
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := &EtcdManager{
-				ctx:             tt.fields.ctx,
-				etcd:            tt.fields.etcd,
-				conf:            tt.fields.conf,
-				nodeId:          tt.fields.nodeId,
-				keepaliveLease:  tt.fields.keepaliveLease,
-				attachedLoad:    tt.fields.attachedLoad,
-				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
-				rebalanceHook:   tt.fields.rebalanceHook,
-			}
-			e.SetRebalanceHook(tt.args.f)
-		})
-	}
-}
-
 func TestEtcdManager_SyncCluster(t *testing.T) {
 
 	tests := []struct {
@@ -292,7 +248,11 @@ func TestEtcdManager_SyncCluster(t *testing.T) {
 		fields  fields
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:    "pass one",
+			fields:  genField(),
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -309,6 +269,19 @@ func TestEtcdManager_SyncCluster(t *testing.T) {
 			}
 			if err := e.SyncCluster(); (err != nil) != tt.wantErr {
 				t.Errorf("SyncCluster() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			sizeBefore := e.clusterHashRing.Size()
+			err := e.Register(lis)
+			if err != nil {
+				t.Errorf("register failed: %v", err)
+			}
+
+			time.Sleep(time.Duration(100) * time.Millisecond)
+			sizeAfter := e.clusterHashRing.Size()
+			if sizeAfter != sizeBefore {
+				t.Logf("hashring size %d -> %d", sizeBefore, sizeAfter)
+			} else {
+				t.Errorf("hashring size didn't change: %d", sizeAfter)
 			}
 		})
 	}
@@ -351,6 +324,46 @@ func TestEtcdManager_Unregister(t *testing.T) {
 			}
 			if !errors.Is(err, rpctypes.ErrKeyNotFound) {
 				t.Errorf("got unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestEtcdManager_Route(t *testing.T) {
+
+	type args struct {
+		ctx context.Context
+		key string
+	}
+	tests := []struct {
+		name        string
+		fields      fields
+		args        args
+		wantRouting *Routing
+		wantErr     bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &EtcdManager{
+				ctx:             tt.fields.ctx,
+				etcd:            tt.fields.etcd,
+				conf:            tt.fields.conf,
+				nodeId:          tt.fields.nodeId,
+				keepaliveLease:  tt.fields.keepaliveLease,
+				attachedLoad:    tt.fields.attachedLoad,
+				clusterHashRing: tt.fields.clusterHashRing,
+				nodeMateMap:     tt.fields.nodeMateMap,
+				rebalanceHook:   tt.fields.rebalanceHook,
+			}
+			gotRouting, err := e.Route(tt.args.ctx, tt.args.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Route() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotRouting, tt.wantRouting) {
+				t.Errorf("Route() gotRouting = %v, want %v", gotRouting, tt.wantRouting)
 			}
 		})
 	}

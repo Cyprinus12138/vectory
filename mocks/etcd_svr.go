@@ -20,6 +20,7 @@ import (
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
+	"math/rand"
 	"net"
 	"os"
 	"sync"
@@ -29,6 +30,12 @@ import (
 
 	pb "go.etcd.io/etcd/api/v3/etcdserverpb"
 )
+
+var updateEventChan chan *mvccpb.Event
+
+func init() {
+	updateEventChan = make(chan *mvccpb.Event, 10)
+}
 
 // MockServer provides a mocked out grpc server of the etcdserver interface.
 type MockServer struct {
@@ -136,6 +143,7 @@ func (ms *MockServers) StartAt(idx int) (err error) {
 	svr := grpc.NewServer()
 	pb.RegisterKVServer(svr, newMockKVServer())
 	pb.RegisterLeaseServer(svr, &mockLeaseServer{})
+	pb.RegisterWatchServer(svr, newMockWatchServer())
 	ms.Servers[idx].GRPCServer = svr
 
 	ms.wg.Add(1)
@@ -214,13 +222,21 @@ func (m *mockKVServer) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResp
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	defer func() {
-		logger.Info("put key finished", logger.String("key", string(req.GetKey())), logger.Interface("data", m.data))
+		logger.Info("put key finished", logger.String("key", string(req.GetKey())), logger.String("value", string(req.Value)))
 	}()
 	if _, ok := m.revision[string(req.GetKey())]; ok {
 		m.revision[string(req.GetKey())] += 1
 	}
 
 	m.data[string(req.GetKey())] = string(req.GetValue())
+	updateEventChan <- &mvccpb.Event{
+		Type: mvccpb.PUT,
+		Kv: &mvccpb.KeyValue{
+			Key:   req.GetKey(),
+			Value: req.GetValue(),
+		},
+		PrevKv: nil,
+	}
 	return &pb.PutResponse{}, nil
 }
 
@@ -247,6 +263,17 @@ func (m *mockKVServer) DeleteRange(ctx context.Context, req *pb.DeleteRangeReque
 		}
 		delete(m.data, key)
 		delete(m.revision, key)
+		updateEventChan <- &mvccpb.Event{
+			Type: mvccpb.DELETE,
+			Kv: &mvccpb.KeyValue{
+				Key:   []byte(key),
+				Value: []byte(value),
+			},
+			PrevKv: &mvccpb.KeyValue{
+				Key:   []byte(key),
+				Value: []byte(value),
+			},
+		}
 		kvs = append(kvs, &mvccpb.KeyValue{Key: []byte(key), Value: []byte(value)})
 	}
 
@@ -285,4 +312,90 @@ func (s *mockLeaseServer) LeaseTimeToLive(context.Context, *pb.LeaseTimeToLiveRe
 
 func (s *mockLeaseServer) LeaseLeases(context.Context, *pb.LeaseLeasesRequest) (*pb.LeaseLeasesResponse, error) {
 	return &pb.LeaseLeasesResponse{}, nil
+}
+
+type mockWatchServer struct {
+	mu       sync.RWMutex
+	watchers map[int64]*watcher
+}
+
+type watcher struct {
+	pb.Watch_WatchServer
+	key      []byte
+	rangeEnd []byte
+}
+
+func newMockWatchServer() *mockWatchServer {
+	return &mockWatchServer{
+		mu:       sync.RWMutex{},
+		watchers: make(map[int64]*watcher),
+	}
+}
+
+func (m *mockWatchServer) Watch(svr pb.Watch_WatchServer) error {
+	ctx, cancel := context.WithCancel(svr.Context())
+	go func() {
+		defer cancel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				recv, err := svr.Recv()
+				if err != nil {
+					continue
+				}
+				switch {
+				case recv.GetCancelRequest() != nil:
+					req := recv.GetCancelRequest()
+					m.mu.Lock()
+					delete(m.watchers, req.GetWatchId())
+					m.mu.Unlock()
+					_ = svr.Send(&pb.WatchResponse{
+						Header:       &pb.ResponseHeader{},
+						WatchId:      req.GetWatchId(),
+						Created:      false,
+						Canceled:     true,
+						CancelReason: "",
+					})
+				case recv.GetCreateRequest() != nil:
+					req := recv.GetCreateRequest()
+					watchID := rand.Int63()
+					m.mu.Lock()
+					m.watchers[watchID] = &watcher{
+						Watch_WatchServer: svr,
+						key:               req.GetKey(),
+						rangeEnd:          req.GetRangeEnd(),
+					}
+					m.mu.Unlock()
+					_ = svr.Send(&pb.WatchResponse{
+						Header:  &pb.ResponseHeader{},
+						WatchId: watchID,
+						Created: true,
+					})
+					logger.Info("added watcher", logger.Int64("watchId", watchID))
+				case recv.GetProgressRequest() != nil:
+				}
+			}
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case e := <-updateEventChan:
+			m.mu.RLock()
+			for i, w := range m.watchers {
+				if string(e.Kv.Key) >= string(w.key) && (w.rangeEnd == nil || string(e.Kv.Key) < string(w.rangeEnd)) {
+					logger.Info("send update event", logger.Interface("event", e))
+					_ = w.Send(&pb.WatchResponse{
+						Header:  &pb.ResponseHeader{},
+						WatchId: i,
+						Events:  []*mvccpb.Event{e},
+					})
+				}
+			}
+			m.mu.RUnlock()
+		}
+	}
 }

@@ -3,6 +3,7 @@ package utils
 import (
 	"container/heap"
 	"fmt"
+	"github.com/chilts/sid"
 	"google.golang.org/grpc"
 	"os"
 	"strings"
@@ -80,4 +81,8 @@ func MergeSortedLists[T comparable](lists [][]T, less func(i, j T) bool, cap int
 	}
 
 	return result
+}
+
+func GenInstanceId(name string) string {
+	return fmt.Sprintf("%s-%s", name, sid.Id())
 }

@@ -9,9 +9,9 @@ import (
 	"github.com/Cyprinus12138/vectory/internal/engine"
 	"github.com/Cyprinus12138/vectory/internal/grpc_handler"
 	"github.com/Cyprinus12138/vectory/internal/http_handler"
+	"github.com/Cyprinus12138/vectory/internal/utils"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/Cyprinus12138/vectory/pkg"
-	"github.com/chilts/sid"
 	"github.com/gin-gonic/gin"
 	etcd "go.etcd.io/etcd/client/v3"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -47,7 +47,7 @@ func (a *Vectory) Setup(ctx context.Context) (err error) {
 
 	// Setup instance id
 	pkg.ClusterName = a.conf.ClusterName
-	a.id = fmt.Sprintf("%s-%s", a.conf.ClusterName, sid.Id())
+	a.id = utils.GenInstanceId(a.conf.ClusterName)
 	logger.Info("setting up the service", logger.String("instanceId", a.id))
 
 	a.sigChan = make(chan os.Signal, 1)
