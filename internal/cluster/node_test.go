@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/utils"
 	"github.com/Cyprinus12138/vectory/mocks"
@@ -21,6 +22,7 @@ var (
 	etcdCli   *etcd.Client
 	initField fields
 	lis       net.Listener
+	conf      *config.ClusterMetaConfig
 )
 
 func init() {
@@ -39,21 +41,23 @@ func init() {
 		panic(err)
 	}
 
-	initField = fields{
-		ctx:  context.Background(),
-		etcd: etcdCli,
-		conf: &config.ClusterMetaConfig{
-			ClusterName: "cluster_uniitest",
-			ClusterMode: config.ClusterSetting{
-				Enabled:     true,
-				GracePeriod: 15,
-				Endpoints:   etcdAddrs,
-				Ttl:         5,
-				LBMode:      "none",
-			},
+	conf = &config.ClusterMetaConfig{
+		ClusterName: "cluster_unittest",
+		ClusterMode: config.ClusterSetting{
+			Enabled:     true,
+			GracePeriod: 15,
+			Endpoints:   etcdAddrs,
+			Ttl:         5,
+			LBMode:      "none",
 		},
+	}
+
+	initField = fields{
+		ctx:         context.Background(),
+		etcd:        etcdCli,
+		conf:        conf,
 		nodeId:      "1233211234567",
-		nodeMateMap: sync.Map{},
+		nodeMateMap: &sync.Map{},
 		keepaliveLease: &etcd.LeaseGrantResponse{
 			ID:  0,
 			TTL: 0,
@@ -76,7 +80,7 @@ func genField() fields {
 			ID:  0,
 			TTL: 0,
 		},
-		nodeMateMap: sync.Map{},
+		nodeMateMap: &sync.Map{},
 	}
 }
 
@@ -88,8 +92,97 @@ type fields struct {
 	keepaliveLease  *etcd.LeaseGrantResponse
 	attachedLoad    bool
 	clusterHashRing *hashring.HashRing
-	nodeMateMap     sync.Map
+	nodeMateMap     *sync.Map
 	rebalanceHook   func(ctx context.Context) error
+}
+
+func (f fields) WithAttachLoad(attach bool) fields {
+	f.attachedLoad = attach
+	return f
+}
+
+func (f fields) WithAllNodeStatus(status pkg.NodeStatus) fields {
+	fNew := fields{
+		ctx:             f.ctx,
+		etcd:            f.etcd,
+		conf:            f.conf,
+		nodeId:          f.nodeId,
+		keepaliveLease:  f.keepaliveLease,
+		attachedLoad:    f.attachedLoad,
+		clusterHashRing: f.clusterHashRing,
+		nodeMateMap:     &sync.Map{},
+		rebalanceHook:   f.rebalanceHook,
+	}
+	f.nodeMateMap.Range(func(key, value any) bool {
+		meta := value.(*NodeMeta)
+		meta.Status = status
+		fNew.nodeMateMap.Store(key, meta)
+		return true
+	})
+	return fNew
+}
+
+// WithNodes can be used to substitute the SyncCluster and ReportLoad(with `withLoad` is `true`) in the unit test.
+func (f fields) WithNodes(num int, withLoad bool, status pkg.NodeStatus) fields {
+	newMap := &sync.Map{}
+	nodesIds := make([]string, num)
+	for i := 0; i < num; i++ {
+		meta := &NodeMeta{
+			NodeId: utils.GenInstanceId("unit-test"),
+			Addr:   "127.0.0.1:0",
+			Status: status,
+		}
+		newMap.Store(meta.NodeId, meta)
+		nodesIds[i] = meta.NodeId
+		if withLoad {
+			key := config.GetNodeLoadPath(meta.NodeId)
+			load := &NodeLoad{
+				CPU:     0.1,
+				MemFree: 123,
+			}
+			loadStr, _ := json.Marshal(load)
+			_, err := f.etcd.Put(f.ctx, key, string(loadStr))
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	f.attachedLoad = withLoad
+	f.nodeMateMap = newMap
+	f.clusterHashRing = hashring.New(nodesIds)
+	return f
+}
+
+func (f fields) WithNode(nodeId string, status pkg.NodeStatus) fields {
+	meta := &NodeMeta{
+		NodeId: nodeId,
+		Addr:   "127.0.0.1:0",
+		Status: status,
+	}
+	f.nodeMateMap.Store(meta.NodeId, meta)
+	if f.clusterHashRing == nil {
+		f.clusterHashRing = hashring.New([]string{meta.NodeId})
+	} else {
+		f.clusterHashRing = f.clusterHashRing.AddNode(meta.NodeId)
+	}
+	if f.attachedLoad {
+		key := config.GetNodeLoadPath(meta.NodeId)
+		load := &NodeLoad{
+			CPU:     0.1,
+			MemFree: 123,
+		}
+		loadStr, _ := json.Marshal(load)
+		_, err := f.etcd.Put(f.ctx, key, string(loadStr))
+		if err != nil {
+			panic(err)
+		}
+	}
+	return f
+}
+
+func (f fields) WithNodeId(nodeId string) fields {
+	f.nodeId = nodeId
+	return f
 }
 
 func TestEtcdManager_NeedLoad(t *testing.T) {
@@ -114,7 +207,7 @@ func TestEtcdManager_NeedLoad(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
 			if got := e.NeedLoad(tt.args.key); got != tt.want {
@@ -163,7 +256,7 @@ func TestEtcdManager_Register(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
 			if err := e.Register(tt.args.lis); (err != nil) != tt.wantErr {
@@ -217,7 +310,7 @@ func TestEtcdManager_ReportLoad(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
 			key := config.GetNodeLoadPath(e.nodeId)
@@ -264,7 +357,7 @@ func TestEtcdManager_SyncCluster(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
 			if err := e.SyncCluster(); (err != nil) != tt.wantErr {
@@ -308,7 +401,7 @@ func TestEtcdManager_Unregister(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
 			get, err := e.etcd.Get(e.ctx, config.GetNodeMetaPath(e.nodeId))
@@ -336,13 +429,47 @@ func TestEtcdManager_Route(t *testing.T) {
 		key string
 	}
 	tests := []struct {
-		name        string
-		fields      fields
-		args        args
-		wantRouting *Routing
-		wantErr     bool
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "route available",
+			fields: initField.WithNodes(3, false, pkg.Healthy),
+			args: args{
+				ctx: context.Background(),
+				key: utils.GenInstanceId("indexName"),
+			},
+			wantErr: false,
+		},
+		{
+			name:   "route unavailable",
+			fields: initField.WithNodes(3, false, pkg.Inactive),
+			args: args{
+				ctx: context.Background(),
+				key: utils.GenInstanceId("indexName"),
+			},
+			wantErr: true,
+		},
+		{
+			name:   "route available with load",
+			fields: initField.WithNodes(3, true, pkg.Healthy).WithAttachLoad(true),
+			args: args{
+				ctx: context.Background(),
+				key: utils.GenInstanceId("indexName"),
+			},
+			wantErr: false,
+		},
+		{
+			name:   "route available without load",
+			fields: initField.WithNodes(3, false, pkg.Healthy).WithAttachLoad(true),
+			args: args{
+				ctx: context.Background(),
+				key: utils.GenInstanceId("indexName"),
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -354,17 +481,26 @@ func TestEtcdManager_Route(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
+
 			gotRouting, err := e.Route(tt.args.ctx, tt.args.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Route() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(gotRouting, tt.wantRouting) {
-				t.Errorf("Route() gotRouting = %v, want %v", gotRouting, tt.wantRouting)
+			if gotRouting == nil {
+				return
 			}
+			tarNode := gotRouting.Node.NodeId
+
+			tarManager := e
+			tarManager.nodeId = tarNode
+			if !tarManager.NeedLoad(tt.args.key) {
+				t.Errorf("not align with the result of NeedResult")
+			}
+
 		})
 	}
 }
@@ -382,7 +518,29 @@ func TestEtcdManager_getLoad(t *testing.T) {
 		wantLoad *NodeLoad
 		wantErr  bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "pass",
+			fields: initField.WithNodes(3, true, pkg.Healthy).WithNode("must", pkg.Healthy),
+			args: args{
+				ctx:    context.Background(),
+				nodeId: "must",
+			},
+			wantLoad: &NodeLoad{
+				CPU:     0.1,
+				MemFree: 123,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "no node",
+			fields: initField.WithNodes(3, true, pkg.Healthy),
+			args: args{
+				ctx:    context.Background(),
+				nodeId: "no data",
+			},
+			wantLoad: nil,
+			wantErr:  true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -394,7 +552,7 @@ func TestEtcdManager_getLoad(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
 			gotLoad, err := e.getLoad(tt.args.ctx, tt.args.nodeId)
@@ -422,7 +580,68 @@ func TestEtcdManager_getNode(t *testing.T) {
 		wantNode *NodeMeta
 		wantErr  bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "health",
+			fields: initField.WithNode("health", pkg.Healthy),
+			args: args{
+				ctx: context.Background(),
+				key: "health",
+			},
+			wantNode: &NodeMeta{
+				NodeId: "health",
+				Addr:   "127.0.0.1:0",
+				Status: pkg.Healthy,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "no_node",
+			fields: initField.WithNodes(0, false, pkg.Healthy),
+			args: args{
+				ctx: context.Background(),
+				key: "no_node",
+			},
+			wantNode: nil,
+			wantErr:  true,
+		},
+		{
+			name:   "nil_ring",
+			fields: initField,
+			args: args{
+				ctx: context.Background(),
+				key: "nil_ring",
+			},
+			wantNode: nil,
+			wantErr:  true,
+		},
+		{
+			name:   "rebalance",
+			fields: initField.WithNode("rebalance", pkg.Rebalancing),
+			args: args{
+				ctx: context.Background(),
+				key: "rebalance",
+			},
+			wantNode: &NodeMeta{
+				NodeId: "rebalance",
+				Addr:   "127.0.0.1:0",
+				Status: pkg.Rebalancing,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "inactive",
+			fields: initField.WithNode("inactive", pkg.Inactive),
+			args: args{
+				ctx: context.Background(),
+				key: "inactive",
+			},
+			wantNode: &NodeMeta{
+				NodeId: "inactive",
+				Addr:   "127.0.0.1:0",
+				Status: pkg.Inactive,
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -434,17 +653,18 @@ func TestEtcdManager_getNode(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
 			gotNode, err := e.getNode(tt.args.ctx, tt.args.key)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("getNode() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("getNode() = %v  error = %v, wantErr %v", gotNode, err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(gotNode, tt.wantNode) {
 				t.Errorf("getNode() gotNode = %v, want %v", gotNode, tt.wantNode)
 			}
+			t.Logf("getNode = %v", gotNode)
 		})
 	}
 }
@@ -462,7 +682,30 @@ func TestEtcdManager_getNodeMeta(t *testing.T) {
 		want    *NodeMeta
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "pass",
+			fields: initField.WithNode("pass", pkg.Healthy),
+			args: args{
+				ctx:    context.Background(),
+				nodeId: "pass",
+			},
+			want: &NodeMeta{
+				NodeId: "pass",
+				Addr:   "127.0.0.1:0",
+				Status: pkg.Healthy,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "not_found",
+			fields: initField,
+			args: args{
+				ctx:    context.Background(),
+				nodeId: "not_found",
+			},
+			want:    nil,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -474,7 +717,7 @@ func TestEtcdManager_getNodeMeta(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
 			got, err := e.getNodeMeta(tt.args.ctx, tt.args.nodeId)
@@ -500,7 +743,30 @@ func TestEtcdManager_setNodeStatus(t *testing.T) {
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "set_inactive_healthy",
+			fields: initField.WithNode("health", pkg.Inactive).WithNodeId("health"),
+			args: args{
+				ctx:    context.Background(),
+				status: pkg.Healthy,
+			},
+		},
+		{
+			name:   "set_health_inactive",
+			fields: initField.WithNode("inactive", pkg.Healthy).WithNodeId("inactive"),
+			args: args{
+				ctx:    context.Background(),
+				status: pkg.Inactive,
+			},
+		},
+		{
+			name:   "set_healthy_healthy",
+			fields: initField.WithNode("health", pkg.Healthy).WithNodeId("health"),
+			args: args{
+				ctx:    context.Background(),
+				status: pkg.Healthy,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -512,25 +778,30 @@ func TestEtcdManager_setNodeStatus(t *testing.T) {
 				keepaliveLease:  tt.fields.keepaliveLease,
 				attachedLoad:    tt.fields.attachedLoad,
 				clusterHashRing: tt.fields.clusterHashRing,
-				nodeMateMap:     tt.fields.nodeMateMap,
+				nodeMetaMap:     tt.fields.nodeMateMap,
 				rebalanceHook:   tt.fields.rebalanceHook,
 			}
-			e.setNodeStatus(tt.args.ctx, tt.args.status)
-		})
-	}
-}
+			err := e.Register(lis)
+			if err != nil {
+				t.Errorf("register failed: %v", err)
+				return
+			}
+			err = e.SyncCluster()
+			if err != nil {
+				t.Errorf("snyc cluster failed: %v", err)
+				return
+			}
 
-func TestGetManger(t *testing.T) {
-	tests := []struct {
-		name string
-		want *EtcdManager
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := GetManger(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetManger() = %v, want %v", got, tt.want)
+			e.setNodeStatus(tt.args.ctx, tt.args.status)
+
+			meta, err := e.getNodeMeta(e.ctx, e.nodeId)
+			if err != nil {
+				t.Errorf("get node meta failed: %v", err)
+				return
+			}
+			if meta.Status != tt.args.status {
+				t.Errorf("expaectd: %v, got: %v", tt.args.status, meta.Status)
+				return
 			}
 		})
 	}
@@ -547,7 +818,15 @@ func TestInitEtcdManager(t *testing.T) {
 		name string
 		args args
 	}{
-		// TODO: Add test cases.
+		{
+			name: "pass",
+			args: args{
+				ctx:    context.Background(),
+				e:      etcdCli,
+				conf:   conf,
+				nodeId: "pass",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -566,7 +845,78 @@ func TestRouting_Weight(t *testing.T) {
 		fields fields
 		want   uint32
 	}{
-		// TODO: Add test cases.
+		{
+			name: "normal",
+			fields: fields{
+				Node: &NodeMeta{
+					NodeId: "normal",
+					Addr:   "123",
+					Status: pkg.Healthy,
+				},
+				Load: &NodeLoad{
+					CPU:     0.10,
+					MemFree: 123,
+				},
+			},
+			want: 900,
+		},
+		{
+			name: "no_load",
+			fields: fields{
+				Node: &NodeMeta{
+					NodeId: "normal",
+					Addr:   "123",
+					Status: pkg.Healthy,
+				},
+				Load: nil,
+			},
+			want: 1000,
+		},
+		{
+			name: "no_cpu",
+			fields: fields{
+				Node: &NodeMeta{
+					NodeId: "normal",
+					Addr:   "123",
+					Status: pkg.Healthy,
+				},
+				Load: &NodeLoad{
+					CPU:     0.0,
+					MemFree: 123,
+				},
+			},
+			want: 1000,
+		},
+		{
+			name: "invalid",
+			fields: fields{
+				Node: &NodeMeta{
+					NodeId: "invalid",
+					Addr:   "123",
+					Status: pkg.Inactive,
+				},
+				Load: &NodeLoad{
+					CPU:     0.10,
+					MemFree: 123,
+				},
+			},
+			want: 0,
+		},
+		{
+			name: "unhealthy",
+			fields: fields{
+				Node: &NodeMeta{
+					NodeId: "unhealthy",
+					Addr:   "123",
+					Status: pkg.Unhealthy,
+				},
+				Load: &NodeLoad{
+					CPU:     0.10,
+					MemFree: 123,
+				},
+			},
+			want: 90,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

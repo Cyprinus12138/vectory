@@ -33,6 +33,7 @@ var (
 	ErrIndexRevisionUpToDate  = errors.New("index is up-to-date")
 	ErrUnknownStatus          = errors.New("unknown node status")
 	ErrNodeNotAvailable       = errors.New("node under unavailable status")
+	ErrClusterNotInitialised  = errors.New("cluster not initialised hash ring is nil")
 	ErrTypeAssertion          = errors.New("type assertion failed")
 	ErrIndexNotFound          = errors.New("index not found")
 	ErrShardNotFound          = errors.New("shard not found")

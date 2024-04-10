@@ -387,7 +387,7 @@ func (m *mockWatchServer) Watch(svr pb.Watch_WatchServer) error {
 			m.mu.RLock()
 			for i, w := range m.watchers {
 				if string(e.Kv.Key) >= string(w.key) && (w.rangeEnd == nil || string(e.Kv.Key) < string(w.rangeEnd)) {
-					logger.Info("send update event", logger.Interface("event", e))
+					logger.Info("send update event", logger.Interface("event", e), logger.Int64("watchId", i))
 					_ = w.Send(&pb.WatchResponse{
 						Header:  &pb.ResponseHeader{},
 						WatchId: i,
