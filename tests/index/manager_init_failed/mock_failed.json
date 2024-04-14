@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "name": "failed",
+    "type": "mock",
+    "input_dim": 10,
+    "shards": 3,
+    "replicas": 2
+  }
+}

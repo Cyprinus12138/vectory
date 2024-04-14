@@ -2,8 +2,11 @@ package utils
 
 import (
 	"container/heap"
+	"encoding/json"
 	"fmt"
 	"github.com/chilts/sid"
+	"github.com/ghodss/yaml"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"os"
 	"strings"
@@ -85,4 +88,18 @@ func MergeSortedLists[T comparable](lists [][]T, less func(i, j T) bool, cap int
 
 func GenInstanceId(name string) string {
 	return fmt.Sprintf("%s-%s", name, sid.Id())
+}
+
+func Unmarshal(raw []byte, dest interface{}) (err error) {
+	err = yaml.Unmarshal(raw, dest)
+	if err == nil {
+		return nil
+	}
+
+	err = json.Unmarshal(raw, dest)
+	if err == nil {
+		return nil
+	}
+
+	return errors.New("cannot unmarshal either json and yaml")
 }

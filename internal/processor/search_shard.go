@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"net/http"
-	"strconv"
 )
 
 type SearchShardProcessor struct {
@@ -57,7 +56,7 @@ func (s *SearchShardProcessor) Handle(ctx context.Context, req *pb.SearchShardRe
 
 	for _, label := range searchResult.Result {
 		resp.Result.Result = append(resp.Result.Result, &pb.Item{
-			Id:    strconv.FormatInt(label.Label, 10),
+			Id:    label.Label,
 			Score: label.Distance,
 			Doc:   "",
 		})

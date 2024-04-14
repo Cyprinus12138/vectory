@@ -38,6 +38,7 @@ var (
 	ErrIndexNotFound          = errors.New("index not found")
 	ErrShardNotFound          = errors.New("shard not found")
 	ErrShardFileNotFound      = errors.New("shard file not found")
+	ErrReloadConfNotFound     = errors.New("reload config is nil")
 	ErrGetRevisionFailed      = errors.New("get index revision failed")
 	ErrOutputDimension        = errors.New("error output dimension")
 	ErrPartlySuccess          = errors.New("load shards partly success")

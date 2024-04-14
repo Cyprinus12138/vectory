@@ -47,6 +47,7 @@ const (
 	Faiss IndexType = "faiss"
 	ScaNN IndexType = "scann"
 	RediS IndexType = "rs"
+	Mock  IndexType = "mock" // Used only for unit tests.
 )
 
 func (i *IndexType) ToString() string {
@@ -88,46 +89,46 @@ const (
 )
 
 type IndexMeta struct {
-	Name     string
-	Type     IndexType
-	InputDim int
+	Name     string    `json:"name,omitempty" yaml:"name"`
+	Type     IndexType `json:"type,omitempty" yaml:"type"`
+	InputDim int       `json:"input_dim,omitempty" yaml:"input_dim"`
 
-	Shards   int32
-	Replicas int32
+	Shards   int32 `json:"shards,omitempty" yaml:"shards"`
+	Replicas int32 `json:"replicas,omitempty" yaml:"replicas"`
 
-	CTime   int64
-	MTime   int64
-	Version string
+	CTime   int64  `json:"c_time,omitempty" yaml:"c_time"`
+	MTime   int64  `json:"m_time,omitempty" yaml:"m_time"`
+	Version string `json:"version,omitempty" yaml:"version"`
 }
 
 type ScheduleSetting struct {
-	Type ScheduleType
+	Type ScheduleType `json:"type,omitempty" yaml:"type"`
 
 	// Crontab is used for cron mode
-	Crontab string
+	Crontab string `json:"crontab,omitempty" yaml:"crontab"`
 
 	// Interval is used for interval mode, the format should be like "1h2m3s"
-	Interval string
+	Interval string `json:"interval,omitempty" yaml:"interval"`
 
 	// Every and Time are used for fixed mode, will schedule the reloading yearly/monthly/weekly/daily.
-	Every TimeUnit
-	Time  string
+	Every TimeUnit `json:"every,omitempty" yaml:"every"`
+	Time  string   `json:"time,omitempty" yaml:"time"`
 
 	// RandomDwellTime If turned on, the reloading process will be delay a few seconds randomly, avoiding the burst load for the data source of index.
-	RandomDwellTime bool
+	RandomDwellTime bool `json:"random_dwell_time,omitempty" yaml:"random_dwell_time"`
 }
 
 type ReloadSetting struct {
-	Enable bool
-	Mode   ReloadMode
+	Enable bool       `json:"enable,omitempty" yaml:"enable"`
+	Mode   ReloadMode `json:"mode,omitempty" yaml:"mode"`
 
-	Schedule ScheduleSetting
+	Schedule ScheduleSetting `json:"schedule" yaml:"schedule"`
 }
 
 type IndexManifest struct {
-	Meta   IndexMeta
-	Source *IndexSource
-	Reload ReloadSetting
+	Meta   IndexMeta      `json:"meta" yaml:"meta"`
+	Source *IndexSource   `json:"source,omitempty" yaml:"source"`
+	Reload *ReloadSetting `json:"reload" yaml:"reload"`
 }
 
 func (m *IndexManifest) Validate() error {
@@ -136,9 +137,9 @@ func (m *IndexManifest) Validate() error {
 }
 
 type Shard struct {
-	IndexName string
-	ShardId   int32
-	ReplicaId int32
+	IndexName string `json:"index_name,omitempty" yaml:"index_name"`
+	ShardId   int32  `json:"shard_id,omitempty" yaml:"shard_id"`
+	ReplicaId int32  `json:"replica_id,omitempty" yaml:"replica_id"`
 }
 
 // ShardKey concatenates the IndexName ShardId and ReplicaId.
@@ -224,7 +225,7 @@ type Index interface {
 	// Search queries the index with the vectors in x.
 	// Returns the IDs of the k nearest neighbors for each query vector and the
 	// corresponding distances.
-	Search(x []float32, k int64) (distances []float32, labels []int64, err error)
+	Search(x []float32, k int64) (distances []float32, labels []string, err error)
 
 	// Delete frees the memory used by the index.
 	Delete()
@@ -259,6 +260,8 @@ func NewIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (Index,
 	switch manifest.Meta.Type {
 	case Faiss:
 		return newFaissIndex(ctx, manifest, shard)
+	case Mock:
+		return newMockIndex(ctx, manifest, shard)
 	default:
 		logger.CtxError(
 			ctx,

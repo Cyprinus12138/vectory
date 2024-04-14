@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+const cfgPath = "../../../tests/config.yml"
+
 type ClusterMetaConfig struct {
 	ClusterName    string `json:"cluster_name" yaml:"cluster_name"`
 	GrpcEnabled    bool   `json:"grpc_enabled" yaml:"grpc_enabled"`
@@ -13,7 +15,7 @@ type ClusterMetaConfig struct {
 }
 
 func init() {
-	err := Init("test/config.yml", []viper.RegisteredConfig{
+	err := Init(cfgPath, []viper.RegisteredConfig{
 		{
 			Key:      "cluster",
 			CanBeNil: false,
@@ -128,7 +130,7 @@ func TestInit(t *testing.T) {
 			args: struct {
 				cfgPath      string
 				configSchema []viper.RegisteredConfig
-			}{cfgPath: "test/config.yml", configSchema: []viper.RegisteredConfig{
+			}{cfgPath: cfgPath, configSchema: []viper.RegisteredConfig{
 				{
 					Key:      "cluster",
 					CanBeNil: false,
@@ -146,7 +148,7 @@ func TestInit(t *testing.T) {
 			args: struct {
 				cfgPath      string
 				configSchema []viper.RegisteredConfig
-			}{cfgPath: "test/config.yml", configSchema: []viper.RegisteredConfig{
+			}{cfgPath: cfgPath, configSchema: []viper.RegisteredConfig{
 				{
 					Key:      "cluster.not_found",
 					CanBeNil: false,
@@ -164,7 +166,7 @@ func TestInit(t *testing.T) {
 			args: struct {
 				cfgPath      string
 				configSchema []viper.RegisteredConfig
-			}{cfgPath: "test/config.yml", configSchema: []viper.RegisteredConfig{
+			}{cfgPath: cfgPath, configSchema: []viper.RegisteredConfig{
 				{
 					Key:      "cluster_invalid_type",
 					CanBeNil: false,

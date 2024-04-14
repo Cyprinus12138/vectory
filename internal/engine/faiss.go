@@ -8,6 +8,7 @@ import (
 	"github.com/DataIntelligenceCrew/go-faiss"
 	"github.com/pkg/errors"
 	"github.com/robfig/cron/v3"
+	"strconv"
 	"sync"
 	"sync/atomic"
 )
@@ -54,8 +55,8 @@ func newFaissIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (*
 		manifest: manifest,
 	}
 
-	if manifest.Reload.Enable {
-		err = index.startReload(manifest.Reload)
+	if manifest.Reload != nil && manifest.Reload.Enable {
+		err = index.startReload(manifest.Reload) // already check nil.
 		if err != nil {
 			logger.CtxError(ctx, "load index file failed", logger.Err(err), logger.Interface("source", manifest.Source), logger.Interface("reload", manifest.Reload))
 			return nil, err
@@ -65,7 +66,7 @@ func newFaissIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (*
 	return index, nil
 }
 
-func (f *FaissIndex) Search(x []float32, k int64) (distances []float32, labels []int64, err error) {
+func (f *FaissIndex) Search(x []float32, k int64) (distances []float32, labels []string, err error) {
 	f.rw.RLock()
 	defer f.rw.RUnlock()
 
@@ -81,7 +82,17 @@ func (f *FaissIndex) Search(x []float32, k int64) (distances []float32, labels [
 		return nil, nil, config.ErrWrongInputDimension
 	}
 
-	return f.index.Search(x, k)
+	distances, intLabels, err := f.index.Search(x, k)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	labels = make([]string, len(intLabels))
+	for i, label := range intLabels {
+		labels[i] = strconv.FormatInt(label, 10)
+	}
+
+	return distances, labels, nil
 }
 
 func (f *FaissIndex) Delete() {
@@ -175,7 +186,7 @@ func (f *FaissIndex) Shard() *Shard {
 	return &f.shard
 }
 
-func (f *FaissIndex) startReload(setting ReloadSetting) (err error) {
+func (f *FaissIndex) startReload(setting *ReloadSetting) (err error) {
 	if setting.Mode == Passive {
 		return nil
 	}

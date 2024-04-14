@@ -2,11 +2,14 @@ package config
 
 import (
 	"fmt"
-	"github.com/Cyprinus12138/vectory/pkg"
+)
+
+const (
+	DefaultIndexPath = "./etc/index"
 )
 
 func GetRootPath() string {
-	return fmt.Sprintf("/vectory/%s", pkg.ClusterName)
+	return GetEnvEtCDRoot()
 }
 
 func GetNodeMetaPathPrefix() string {
@@ -22,7 +25,7 @@ func GetNodeLoadPath(id string) string {
 }
 
 func GetLocalIndexRootPath() string {
-	return "./etc/index"
+	return GetEnvLocalIndexPath()
 }
 
 func GetLocalIndexPath(fileName string) string {

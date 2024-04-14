@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/Cyprinus12138/vectory/internal/cluster"
 	"github.com/Cyprinus12138/vectory/internal/config"
+	"github.com/Cyprinus12138/vectory/internal/utils"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/Cyprinus12138/vectory/pkg"
 	"github.com/ghodss/yaml"
@@ -74,20 +75,20 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 			log.With(logger.String("manifest_key", string(kv.Key)))
 			manifest := &IndexManifest{}
 
-			err = yaml.Unmarshal(kv.Value, manifest)
+			err = utils.Unmarshal(kv.Value, manifest)
 			if err != nil {
-				indexFailed += 1
 				log.Error("unmarshal manifest failed", logger.String("content", string(kv.Value)), logger.Err(err))
 				continue
 			}
 
 			idxTotalShard, idxSuccessShard, err := manger.loadIndex(ctx, manifest)
 			if err != nil {
-				log.Error("invalid index manifest", logger.Err(err))
+				indexFailed += 1
+				log.Error("load index failed", logger.Err(err))
 				continue
 			}
 			total += idxTotalShard
-			idxSuccessShard += successShard
+			successShard += idxSuccessShard
 		}
 
 		// Provide a way for cluster manager to trigger the rebalance process.
@@ -112,25 +113,24 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 			manifest := &IndexManifest{}
 			rawCfg, err = os.ReadFile(config.GetLocalIndexPath(file.Name()))
 			if err != nil {
-				indexFailed += 1
 				log.Error("read local manifest file failed", logger.Err(err))
 				continue
 			}
 
-			err = yaml.Unmarshal(rawCfg, manifest)
+			err = utils.Unmarshal(rawCfg, manifest)
 			if err != nil {
-				indexFailed += 1
 				log.Error("unmarshal manifest failed", logger.String("content", string(rawCfg)))
 				continue
 			}
 
 			idxTotalShard, idxSuccessShard, err := manger.loadIndex(ctx, manifest)
 			if err != nil {
+				indexFailed += 1
 				log.Error("invalid index manifest", logger.Err(err))
 				continue
 			}
 			total += idxTotalShard
-			idxSuccessShard += successShard
+			successShard += idxSuccessShard
 		}
 	}
 
@@ -157,7 +157,7 @@ func GetManager() *IndexManager {
 
 type Label struct {
 	Distance float32
-	Label    int64
+	Label    string
 }
 
 type SearchResult struct {
@@ -173,15 +173,27 @@ type SearchResult struct {
 func (i *IndexManager) loadIndex(ctx context.Context, manifest *IndexManifest) (totalShard, successShard int, err error) {
 	log := logger.DefaultLoggerWithCtx(ctx)
 
+	var clusterManger *cluster.EtcdManager
+	if i.mode == Cluster {
+		clusterManger = cluster.GetManger()
+		if clusterManger == nil {
+			log.Error("clusterManager is nil!")
+			return 0, 0, config.ErrClusterNotInitialised
+		}
+	}
+
 	err = manifest.Validate()
 	if err != nil {
 		log.Error("invalid manifest content", logger.Err(err))
 		return 0, 0, err
 	}
-	clusterManger := cluster.GetManger()
+
 	shards := manifest.GenerateShards()
 	for _, shard := range shards {
-		if _, loaded := i.engineStore.Load(shard.UniqueShardKey()); (i.mode == Cluster && clusterManger != nil && !clusterManger.NeedLoad(shard.ShardKey())) || loaded {
+		if _, loaded := i.engineStore.Load(shard.UniqueShardKey()); loaded { // Already loaded.
+			continue
+		}
+		if clusterManger != nil && !clusterManger.NeedLoad(shard.ShardKey()) { // For cluster mode, check whether the shard should be loaded.
 			continue
 		}
 		totalShard += 1
@@ -349,57 +361,61 @@ func (i *IndexManager) SyncCluster(ctx context.Context) {
 
 	go func(ctx context.Context) {
 		log := logger.DefaultLoggerWithCtx(ctx)
-
 		watch := i.etcd.Watch(ctx, config.GetIndexManifestPathPrefix(), etcd.WithPrefix())
 		var watchResp etcd.WatchResponse
-		select {
-		case watchResp = <-watch:
-			if watchResp.Canceled {
-				logger.Fatal("watch cluster canceled",
-					logger.Err(watchResp.Err()),
-				)
+		for {
+			select {
+			case <-ctx.Done():
 				return
-			}
-			for _, event := range watchResp.Events {
-				manifest := &IndexManifest{}
-
-				jErr := yaml.Unmarshal(event.Kv.Value, manifest)
-				if jErr != nil {
-					log.Error(
-						"unmarshal manifest failed",
-						logger.String("content", string(event.Kv.Value)),
-						logger.Err(jErr),
+			case watchResp = <-watch:
+				if watchResp.Canceled {
+					logger.Fatal("watch cluster canceled",
+						logger.Err(watchResp.Err()),
 					)
+					return
 				}
-				jErr = manifest.Validate()
-				if jErr != nil {
-					log.Error("invalid manifest content", logger.Err(jErr))
-					continue
-				}
-				if event.IsCreate() {
-					log.Info("new added index manifest", logger.Interface("meta", manifest.Meta))
-					totalShards, successShards, err := i.loadIndex(ctx, manifest)
-					if err != nil {
-						log.Error("invalid index manifest", logger.Err(err))
-						continue
-					}
-					if successShards < totalShards {
-						log.Warn(
-							"several new added shard loaded failed",
-							logger.Int("total", totalShards),
-							logger.Int("success", successShards),
+				for _, event := range watchResp.Events {
+					manifest := &IndexManifest{}
+
+					jErr := yaml.Unmarshal(event.Kv.Value, manifest)
+					if jErr != nil {
+						log.Error(
+							"unmarshal manifest failed",
+							logger.String("content", string(event.Kv.Value)),
+							logger.Err(jErr),
 						)
 					}
-				}
-				if event.Type == mvccpb.DELETE {
-					log.Info("index deletion detected", logger.Interface("meta", manifest.Meta))
-					i.deleteIndex(ctx, manifest.Meta.Name)
-				}
-				if event.IsModify() {
-					log.Warn("modify a loaded index is not current supported and coming soon!")
+					jErr = manifest.Validate()
+					if jErr != nil {
+						log.Error("invalid manifest content", logger.Err(jErr))
+						continue
+					}
+					if event.IsCreate() {
+						log.Info("new added index manifest", logger.Interface("meta", manifest.Meta))
+						totalShards, successShards, err := i.loadIndex(ctx, manifest)
+						if err != nil {
+							log.Error("invalid index manifest", logger.Err(err))
+							continue
+						}
+						if successShards < totalShards {
+							log.Warn(
+								"several new added shard loaded failed",
+								logger.Int("total", totalShards),
+								logger.Int("success", successShards),
+							)
+						}
+					}
+					if event.Type == mvccpb.DELETE {
+						log.Info("index deletion detected", logger.Interface("meta", manifest.Meta))
+						i.deleteIndex(ctx, manifest.Meta.Name)
+					}
+					if event.IsModify() {
+						log.Warn("modify a loaded index is not current supported and coming soon!")
+					}
 				}
 			}
 		}
+
 	}(ctx)
 }
 

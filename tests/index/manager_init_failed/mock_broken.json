@@ -1,0 +1,10 @@
+{
+  "meta": {
+    "name": "mock_idx_3",
+    "type": "mock",
+    "input_dim": "10",
+    "shards": 3,
+    "replicas": 2
+  },
+  "note": "this will unmarshal failed and be ignored"
+}
