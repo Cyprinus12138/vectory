@@ -202,8 +202,8 @@ func (m *mockKVServer) Range(ctx context.Context, req *pb.RangeRequest) (*pb.Ran
 
 	if len(req.GetRangeEnd()) > 0 {
 		for k, v := range m.data {
-			if k >= string(req.GetKey()) && (req.GetRangeEnd() == nil || key < string(req.GetRangeEnd())) {
-				kvs = append(kvs, &mvccpb.KeyValue{Key: []byte(key), Value: []byte(v)})
+			if k >= string(req.GetKey()) && k < string(req.GetRangeEnd()) {
+				kvs = append(kvs, &mvccpb.KeyValue{Key: []byte(k), Value: []byte(v)})
 			}
 		}
 	} else {

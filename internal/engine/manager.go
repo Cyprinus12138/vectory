@@ -244,7 +244,7 @@ func (i *IndexManager) deleteIndex(ctx context.Context, indexName string) {
 		}
 		index.Delete()
 		deleted += 1
-		log.Info("engine has been release", logger.String("shardKey", index.Shard().ShardKey()))
+		log.Info("engine has been released", logger.String("shardKey", index.Shard().ShardKey()))
 	}
 	log.Info("index delete done", logger.Int("deletedShards", deleted))
 }

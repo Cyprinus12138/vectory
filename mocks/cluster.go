@@ -3,16 +3,16 @@ package mocks
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/Cyprinus12138/vectory/internal/cluster"
 	"github.com/Cyprinus12138/vectory/internal/config"
-	"github.com/Cyprinus12138/vectory/internal/utils"
 	"github.com/Cyprinus12138/vectory/pkg"
 	etcd "go.etcd.io/etcd/client/v3"
 	"net"
 )
 
 func InitMockCluster(ctx context.Context, etcdCli *etcd.Client, num int) {
-	nodeId := utils.GenInstanceId("unit-test")
+	nodeId := "mock-node-self"
 	conf := &config.ClusterMetaConfig{
 		ClusterName: "cluster_unittest",
 		ClusterMode: config.ClusterSetting{
@@ -32,7 +32,7 @@ func InitMockCluster(ctx context.Context, etcdCli *etcd.Client, num int) {
 
 	for i := 0; i < num; i++ {
 		meta := &cluster.NodeMeta{
-			NodeId: utils.GenInstanceId("unit-test"),
+			NodeId: fmt.Sprintf("mock-node-%d", i),
 			Addr:   "127.0.0.1:0",
 			Status: pkg.Healthy,
 		}

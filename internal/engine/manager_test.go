@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"github.com/Cyprinus12138/vectory/internal/cluster"
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/utils/config_manager"
@@ -67,6 +68,46 @@ func init() {
 	}
 
 	mocks.InitMockCluster(context.Background(), etcdCli, 3)
+}
+
+type fields struct {
+	engineStore    *sync.Map
+	indexManifests *sync.Map
+	pendingShards  *sync.Map
+	listeners      *sync.Map
+	mode           Mode
+	etcd           *etcd.Client
+}
+
+func mockIndexManagerField(numIndex int) fields {
+	f := fields{
+		engineStore:    &sync.Map{},
+		indexManifests: &sync.Map{},
+		pendingShards:  &sync.Map{},
+		listeners:      &sync.Map{},
+		etcd:           etcdCli,
+	}
+
+	for i := 0; i < numIndex; i++ {
+		manifest := &IndexManifest{
+			Meta: IndexMeta{
+				Name:     fmt.Sprintf("test_%d", i),
+				Type:     "mock",
+				InputDim: 5,
+				Shards:   3,
+				Replicas: 2,
+			},
+		}
+		f.indexManifests.Store(manifest.Meta.Name, manifest)
+		for _, shard := range manifest.GenerateUniqueShards() {
+			idx, err := NewIndex(context.Background(), manifest, shard)
+			if err != nil {
+				panic(err)
+			}
+			f.engineStore.Store(shard.UniqueShardKey(), idx)
+		}
+	}
+	return f
 }
 
 func TestIndexManager_Rebalance(t *testing.T) {
@@ -345,14 +386,6 @@ func TestIndexManager_UnregisterListener(t *testing.T) {
 }
 
 func TestIndexManager_deleteIndex(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		ctx       context.Context
 		indexName string
@@ -362,7 +395,22 @@ func TestIndexManager_deleteIndex(t *testing.T) {
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "success",
+			fields: mockIndexManagerField(3),
+			args: args{
+				ctx:       context.Background(),
+				indexName: "test_0",
+			},
+		},
+		{
+			name:   "not found",
+			fields: mockIndexManagerField(3),
+			args: args{
+				ctx:       context.Background(),
+				indexName: "test_not_found",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -400,7 +448,54 @@ func TestIndexManager_loadIndex(t *testing.T) {
 		wantSuccessShard int
 		wantErr          bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "cluster",
+			fields: fields{
+				engineStore:    &sync.Map{},
+				indexManifests: &sync.Map{},
+				pendingShards:  &sync.Map{},
+				mode:           Cluster,
+			},
+			args: args{
+				ctx: context.Background(),
+				manifest: &IndexManifest{
+					Meta: IndexMeta{
+						Name:     "mock_idx_1",
+						Type:     "mock",
+						InputDim: 10,
+						Shards:   5,
+						Replicas: 2,
+					},
+				},
+			},
+			wantTotalShard:   5,
+			wantSuccessShard: 5,
+			wantErr:          false,
+		},
+		{
+			name: "single",
+			fields: fields{
+				engineStore:    &sync.Map{},
+				indexManifests: &sync.Map{},
+				pendingShards:  &sync.Map{},
+				mode:           Single,
+			},
+			args: args{
+				ctx: context.Background(),
+				manifest: &IndexManifest{
+					Meta: IndexMeta{
+						Name:     "mock_idx_1",
+						Type:     "mock",
+						InputDim: 10,
+						Shards:   3,
+						Replicas: 2,
+					},
+				},
+			},
+			wantTotalShard:   3,
+			wantSuccessShard: 3,
+			wantErr:          false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -596,7 +691,21 @@ func TestMode_ToString(t *testing.T) {
 		m    Mode
 		want string
 	}{
-		// TODO: Add test cases.
+		{
+			name: "cluster",
+			m:    Cluster,
+			want: "Cluster",
+		},
+		{
+			name: "single",
+			m:    Single,
+			want: "Single",
+		},
+		{
+			name: "unknown",
+			m:    0,
+			want: "Unknown",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

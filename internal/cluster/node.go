@@ -239,7 +239,7 @@ func (e *EtcdManager) setNodeStatus(ctx context.Context, status pkg.NodeStatus) 
 func (e *EtcdManager) SyncCluster() error {
 	ctx, cancel := context.WithTimeout(e.ctx, defaultRegisterTimeoutMs*time.Millisecond)
 	defer cancel()
-	resp, err := e.etcd.Get(ctx, config.GetNodeMetaPath(config.GetNodeMetaPathPrefix()), etcd.WithPrefix())
+	resp, err := e.etcd.Get(ctx, config.GetNodeMetaPathPrefix(), etcd.WithPrefix())
 	if err != nil {
 		logger.Error("get node meta failed", logger.Err(err))
 		return err
@@ -257,7 +257,7 @@ func (e *EtcdManager) SyncCluster() error {
 			continue
 		}
 		nodes = append(nodes, meta.NodeId)
-		logger.Debug("discovered node", logger.String("nodeId", meta.NodeId))
+		logger.Debug("discovered node", logger.String("nodeId", meta.NodeId), logger.String("key", string(kv.Key)))
 	}
 
 	e.clusterHashRing = hashring.New(nodes)
