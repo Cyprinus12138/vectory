@@ -7,7 +7,7 @@ var (
 	ClusterName    = "default"
 	Status         = Start
 	statusMutex    = sync.RWMutex{}
-	StatusUpdating = make(chan NodeStatus)
+	StatusUpdating = make(chan NodeStatus, 1)
 )
 
 func GetStatus() NodeStatus {

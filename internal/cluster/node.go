@@ -33,6 +33,7 @@ type EtcdManager struct {
 
 	// attachedLoad indicates whether already reporting the loads.
 	attachedLoad    bool
+	hashRingMu      sync.RWMutex
 	clusterHashRing *hashring.HashRing
 	nodeMetaMap     *sync.Map // Key: nodeId Value: NodeMeta
 	rebalanceHook   func(ctx context.Context) error
@@ -265,7 +266,9 @@ func (e *EtcdManager) SyncCluster() error {
 		logger.Debug("discovered node", logger.String("nodeId", meta.NodeId), logger.String("key", string(kv.Key)))
 	}
 
+	e.hashRingMu.Lock()
 	e.clusterHashRing = hashring.New(nodes)
+	e.hashRingMu.Unlock()
 
 	go func() {
 		watch := e.etcd.Watch(e.ctx, config.GetNodeMetaPathPrefix(), etcd.WithPrefix())
@@ -287,8 +290,11 @@ func (e *EtcdManager) SyncCluster() error {
 						logger.Error("invalid node meta", logger.String("meta", string(event.Kv.Value)), logger.Err(jErr))
 					}
 					if event.IsCreate() {
+						e.hashRingMu.Lock()
 						e.clusterHashRing = e.clusterHashRing.AddNode(meta.NodeId)
-						logger.Debug("added node", logger.String("nodeId", meta.NodeId), logger.Int("currentSize", e.clusterHashRing.Size()))
+						size := e.clusterHashRing.Size()
+						e.hashRingMu.Unlock()
+						logger.Debug("added node", logger.String("nodeId", meta.NodeId), logger.Int("currentSize", size))
 						e.nodeMetaMap.Store(meta.NodeId, meta)
 						if e.rebalanceHook != nil {
 							err = e.rebalanceHook(e.ctx)
@@ -299,8 +305,11 @@ func (e *EtcdManager) SyncCluster() error {
 					}
 					if event.Type == mvccpb.DELETE {
 						e.nodeMetaMap.Delete(meta.NodeId)
-						logger.Debug("removed node", logger.String("nodeId", meta.NodeId), logger.Int("currentSize", e.clusterHashRing.Size()))
+						e.hashRingMu.Lock()
 						e.clusterHashRing = e.clusterHashRing.RemoveNode(meta.NodeId)
+						size := e.clusterHashRing.Size()
+						e.hashRingMu.Unlock()
+						logger.Debug("removed node", logger.String("nodeId", meta.NodeId), logger.Int("currentSize", size))
 						if e.rebalanceHook != nil {
 							err = e.rebalanceHook(e.ctx)
 							if err != nil {
@@ -311,7 +320,9 @@ func (e *EtcdManager) SyncCluster() error {
 					if event.IsModify() {
 						e.nodeMetaMap.Store(meta.NodeId, meta)
 						if meta.Status == pkg.Inactive {
+							e.hashRingMu.Lock()
 							e.clusterHashRing = e.clusterHashRing.RemoveNode(meta.NodeId)
+							e.hashRingMu.Unlock()
 							if e.rebalanceHook != nil {
 								err = e.rebalanceHook(e.ctx)
 								if err != nil {
@@ -329,6 +340,9 @@ func (e *EtcdManager) SyncCluster() error {
 
 // NeedLoad returns whether the shard is loaded in current node.
 func (e *EtcdManager) NeedLoad(key string) bool {
+	e.hashRingMu.RLock()
+	defer e.hashRingMu.RUnlock()
+
 	node, ok := e.clusterHashRing.GetNode(key)
 	return ok && node == e.nodeId
 }
@@ -353,11 +367,15 @@ func (e *EtcdManager) getNodeMeta(ctx context.Context, nodeId string) (*NodeMeta
 func (e *EtcdManager) getNode(ctx context.Context, key string) (node *NodeMeta, err error) {
 	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("key", key))
 
-	if e.clusterHashRing == nil {
+	e.hashRingMu.RLock()
+	ring := e.clusterHashRing
+	e.hashRingMu.RUnlock()
+
+	if ring == nil {
 		return nil, config.ErrClusterNotInitialised
 	}
 
-	nodeId, ok := e.clusterHashRing.GetNode(key)
+	nodeId, ok := ring.GetNode(key)
 	if !ok {
 		log.Error("no available node in the cluster")
 		return nil, config.ErrNodeNotAvailable

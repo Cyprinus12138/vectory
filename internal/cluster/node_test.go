@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/utils"
+	"github.com/Cyprinus12138/vectory/internal/utils/config_manager"
 	"github.com/Cyprinus12138/vectory/mocks"
 	"github.com/Cyprinus12138/vectory/pkg"
 	"github.com/pkg/errors"
 	"github.com/serialx/hashring"
+	"github.com/spf13/viper"
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	etcd "go.etcd.io/etcd/client/v3"
 	"net"
@@ -26,6 +28,16 @@ var (
 )
 
 func init() {
+	err := config_manager.Init("../../tests/config.yml", []viper.RegisteredConfig{
+		{
+			Key:      "env",
+			CanBeNil: true,
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	etcdSvrs, err := mocks.StartMockServers(1)
 	if err != nil {
 		panic(err)
@@ -363,14 +375,26 @@ func TestEtcdManager_SyncCluster(t *testing.T) {
 			if err := e.SyncCluster(); (err != nil) != tt.wantErr {
 				t.Errorf("SyncCluster() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			e.hashRingMu.RLock()
 			sizeBefore := e.clusterHashRing.Size()
+			e.hashRingMu.RUnlock()
+
 			err := e.Register(lis)
 			if err != nil {
 				t.Errorf("register failed: %v", err)
 			}
 
-			time.Sleep(time.Duration(100) * time.Millisecond)
-			sizeAfter := e.clusterHashRing.Size()
+			// Poll for the watcher to process the register event.
+			var sizeAfter int
+			for i := 0; i < 20; i++ {
+				time.Sleep(50 * time.Millisecond)
+				e.hashRingMu.RLock()
+				sizeAfter = e.clusterHashRing.Size()
+				e.hashRingMu.RUnlock()
+				if sizeAfter != sizeBefore {
+					break
+				}
+			}
 			if sizeAfter != sizeBefore {
 				t.Logf("hashring size %d -> %d", sizeBefore, sizeAfter)
 			} else {

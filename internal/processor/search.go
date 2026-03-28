@@ -42,6 +42,14 @@ func (s *SearchProcessor) GinHandleFunc() gin.HandlerFunc {
 // Handle is called by gRPC handlers
 func (s *SearchProcessor) Handle(ctx context.Context, req *pb.SearchRequest) (resp *pb.SearchResponse, err error) {
 	log := logger.DefaultLoggerWithCtx(ctx)
+
+	if req.GetLimit() <= 0 {
+		return nil, config.ErrInvalidLimit
+	}
+	if len(req.GetInput()) == 0 {
+		return nil, config.ErrEmptyInput
+	}
+
 	idxManager := engine.GetManager()
 	resp = &pb.SearchResponse{}
 	resp.Results = make([]*pb.SearchResult, len(req.Input))
@@ -52,7 +60,7 @@ func (s *SearchProcessor) Handle(ctx context.Context, req *pb.SearchRequest) (re
 			log.Error(
 				"failed to search index locally",
 				logger.String("indexName", req.GetIndexName()),
-				logger.Err(err),
+				logger.Err(iErr),
 			)
 			resp.Results[i] = &pb.SearchResult{
 				Error: iErr.Error(),
@@ -65,13 +73,11 @@ func (s *SearchProcessor) Handle(ctx context.Context, req *pb.SearchRequest) (re
 		shardResultsPb := make([]*pb.SearchResult, len(shardResults))
 		itemResultPb := make([][]*pb.Item, len(shardResults))
 		for j, result := range shardResults { // Iterate shards, search single index with shards if any.
-			var shardErr error
 			shardResultsPb[j] = &pb.SearchResult{}
 			labels := result.Result
 
 			if !result.ToRoute {
 				shardResultsPb[j].Result = make([]*pb.Item, len(labels))
-				shardResultsPb[j].Error = shardErr.Error()
 				for idx, label := range labels {
 					shardResultsPb[j].Result[idx] = &pb.Item{
 						Id:    label.Label,
@@ -111,8 +117,8 @@ func (s *SearchProcessor) Handle(ctx context.Context, req *pb.SearchRequest) (re
 				mergedErr string
 			)
 			result := &pb.SearchResult{}
-			result.Result = utils.MergeSortedLists[*pb.Item](itemResultPb, func(i, j *pb.Item) bool {
-				return true
+			result.Result = utils.MergeSortedLists[*pb.Item](itemResultPb, func(a, b *pb.Item) bool {
+				return a.GetScore() < b.GetScore()
 			}, int(req.GetLimit()))
 
 			for _, searchResult := range shardResultsPb {

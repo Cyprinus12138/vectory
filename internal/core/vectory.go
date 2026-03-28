@@ -141,7 +141,11 @@ func (a *Vectory) Start() error {
 		// It will be consumed by cluster manager to make the node status sync with remote registry (eg. EtCD)
 		go func() {
 			for {
-				<-pkg.StatusUpdating
+				select {
+				case <-a.ctx.Done():
+					return
+				case <-pkg.StatusUpdating:
+				}
 			}
 		}()
 		logger.Info(
@@ -176,6 +180,9 @@ func (a *Vectory) Start() error {
 func (a *Vectory) Stop(sig os.Signal) {
 
 	if a.conf.ClusterMode.Enabled {
+		// Signal to the cluster that this node is draining before unregistering,
+		// so peers stop routing new requests to it.
+		pkg.SetStatus(pkg.Inactive)
 		logger.Info("unregistering rpc")
 		cluster.GetManger().Unregister()
 	}
