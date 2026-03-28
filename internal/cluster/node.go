@@ -133,10 +133,15 @@ func (e *EtcdManager) Register(lis net.Listener) (err error) {
 	}
 
 	// The status updating information is consumed here, updating the status info on the EtCD.
+	// Loop until context is cancelled so every status transition is propagated.
 	go func(ctx context.Context) {
-		select {
-		case status := <-pkg.StatusUpdating:
-			e.setNodeStatus(ctx, status)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case status := <-pkg.StatusUpdating:
+				e.setNodeStatus(ctx, status)
+			}
 		}
 	}(e.ctx)
 

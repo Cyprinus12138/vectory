@@ -2,11 +2,7 @@ syntax = "proto3";
 option go_package = ".";
 import "proto/vectory/common.proto";
 
-// An example service definition.
 service Core {
-  // Sends a greeting
-  rpc SayHello (HelloRequest) returns (HelloReply) {}
-
   rpc Search(SearchRequest) returns (SearchResponse){}
 
   rpc ListIndex(ListIndexRequest) returns (ListIndexResponse) {}
@@ -16,44 +12,113 @@ service Core {
   rpc GetIndexStat(GetIndexStatRequest) returns (GetIndexStatResponse) {}
 
   rpc GetIndexMeta(GetIndexMetaRequest) returns (GetIndexMetaResponse) {}
-
 }
 
-// The request message containing the user's name.
-message HelloRequest {
-  string name = 1;
-}
-
-// The response message containing the greetings
-message HelloReply {
-  string message = 1;
-}
+// ---- Search ----
 
 message SearchRequest {
   RequestHeader header = 1;
   string index_name = 2;
   repeated Vector input = 3;
   int32 limit = 4;
-
 }
 
-message SearchResponse{
+message SearchResponse {
   ResponseHeader header = 1;
   repeated SearchResult results = 2;
 }
 
-message ListIndexRequest{}
+// ---- ListIndex ----
 
-message ListIndexResponse{}
+message ListIndexRequest {
+  RequestHeader header = 1;
+}
 
-message CreateIndexRequest{}
+message ListIndexResponse {
+  ResponseHeader header = 1;
+  repeated IndexMetaInfo indices = 2;
+}
 
-message CreateIndexResponse{}
+// ---- CreateIndex ----
 
-message GetIndexStatRequest{}
+message CreateIndexRequest {
+  RequestHeader header = 1;
+  IndexMetaInfo meta = 2;
+  IndexSourceInfo source = 3;
+  ReloadSettingInfo reload = 4;
+}
 
-message GetIndexStatResponse{}
+message CreateIndexResponse {
+  ResponseHeader header = 1;
+}
 
-message GetIndexMetaRequest{}
+// ---- GetIndexStat ----
 
-message GetIndexMetaResponse{}
+message GetIndexStatRequest {
+  RequestHeader header = 1;
+  string index_name = 2;
+}
+
+message GetIndexStatResponse {
+  ResponseHeader header = 1;
+  string index_name = 2;
+  repeated ShardStat shards = 3;
+}
+
+message ShardStat {
+  int32 shard_id = 1;
+  int32 replica_id = 2;
+  int64 vector_count = 3;
+  string metric_type = 4;
+  int32 input_dim = 5;
+  int64 revision = 6;
+  bool available = 7;
+}
+
+// ---- GetIndexMeta ----
+
+message GetIndexMetaRequest {
+  RequestHeader header = 1;
+  string index_name = 2;
+}
+
+message GetIndexMetaResponse {
+  ResponseHeader header = 1;
+  IndexMetaInfo meta = 2;
+  IndexSourceInfo source = 3;
+  ReloadSettingInfo reload = 4;
+}
+
+// ---- Shared message types ----
+
+message IndexMetaInfo {
+  string name = 1;
+  string type = 2;        // "faiss" | "scann" | "rs"
+  int32 input_dim = 3;
+  int32 shards = 4;
+  int32 replicas = 5;
+  int64 c_time = 6;
+  int64 m_time = 7;
+  string version = 8;
+}
+
+message IndexSourceInfo {
+  string type = 1;        // "local_path" | "s3" | "hdfs" | "ftp" | "sftp"
+  string location = 2;
+  string name_fmt = 3;
+}
+
+message ReloadSettingInfo {
+  bool enable = 1;
+  string mode = 2;        // "active" | "passive"
+  ScheduleSettingInfo schedule = 3;
+}
+
+message ScheduleSettingInfo {
+  string type = 1;        // "cron" | "interval" | "fixed"
+  string crontab = 2;
+  string interval = 3;
+  string every = 4;       // "year" | "month" | "week" | "day"
+  string time = 5;
+  bool random_dwell_time = 6;
+}

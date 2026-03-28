@@ -226,14 +226,6 @@ func TestIndexManager_ResolveUniqueShard(t *testing.T) {
 }
 
 func TestIndexManager_Search(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		ctx       context.Context
 		indexName string
@@ -247,7 +239,77 @@ func TestIndexManager_Search(t *testing.T) {
 		wantResult []SearchResult
 		wantErr    bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "mock_1",
+			fields: mockIndexManagerField(3),
+			args: args{
+				ctx:       context.Background(),
+				indexName: "test_1",
+				x:         []float32{1, 1, 1, 1, 1},
+				k:         1,
+			},
+			wantResult: []SearchResult{
+				{
+					Shard: Shard{
+						IndexName: "test_1",
+						ShardId:   0,
+					},
+					Error: nil,
+					Result: []Label{
+						{
+							Distance: 0.5,
+							Label:    "1",
+						}, {
+							Distance: 0.5,
+							Label:    "2",
+						}, {
+							Distance: 0.5,
+							Label:    "3",
+						},
+					},
+					ToRoute: false,
+				}, {
+					Shard: Shard{
+						IndexName: "test_1",
+						ShardId:   1,
+					},
+					Error: nil,
+					Result: []Label{
+						{
+							Distance: 0.5,
+							Label:    "1",
+						}, {
+							Distance: 0.5,
+							Label:    "2",
+						}, {
+							Distance: 0.5,
+							Label:    "3",
+						},
+					},
+					ToRoute: false,
+				}, {
+					Shard: Shard{
+						IndexName: "test_1",
+						ShardId:   2,
+					},
+					Error: nil,
+					Result: []Label{
+						{
+							Distance: 0.5,
+							Label:    "1",
+						}, {
+							Distance: 0.5,
+							Label:    "2",
+						}, {
+							Distance: 0.5,
+							Label:    "3",
+						},
+					},
+					ToRoute: false,
+				},
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -272,14 +334,6 @@ func TestIndexManager_Search(t *testing.T) {
 }
 
 func TestIndexManager_SearchShard(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		ctx   context.Context
 		shard Shard
@@ -293,7 +347,122 @@ func TestIndexManager_SearchShard(t *testing.T) {
 		wantResult SearchResult
 		wantErr    bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "mock_pass",
+			fields: mockIndexManagerField(3),
+			args: args{
+				ctx: nil,
+				shard: Shard{
+					IndexName: "test_1",
+					ShardId:   1,
+				},
+				x: []float32{1, 1, 1, 1, 1},
+				k: 1,
+			},
+			wantResult: SearchResult{
+				Shard: Shard{
+					IndexName: "test_1",
+					ShardId:   1,
+				},
+				Error: nil,
+				Result: []Label{
+					{
+						Distance: 0.5,
+						Label:    "1",
+					}, {
+						Distance: 0.5,
+						Label:    "2",
+					}, {
+						Distance: 0.5,
+						Label:    "3",
+					},
+				},
+				ToRoute: false,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "mock_should_oversee_replicaId",
+			fields: mockIndexManagerField(3),
+			args: args{
+				ctx: nil,
+				shard: Shard{
+					IndexName: "test_1",
+					ShardId:   1,
+					ReplicaId: 10, // Not really exists.
+				},
+				x: []float32{1, 1, 1, 1, 1},
+				k: 1,
+			},
+			wantResult: SearchResult{
+				Shard: Shard{
+					IndexName: "test_1",
+					ShardId:   1,
+					ReplicaId: 10,
+				},
+				Error: nil,
+				Result: []Label{
+					{
+						Distance: 0.5,
+						Label:    "1",
+					}, {
+						Distance: 0.5,
+						Label:    "2",
+					}, {
+						Distance: 0.5,
+						Label:    "3",
+					},
+				},
+				ToRoute: false,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "mock_wrong_dimension",
+			fields: mockIndexManagerField(3),
+			args: args{
+				ctx: nil,
+				shard: Shard{
+					IndexName: "test_1",
+					ShardId:   1,
+				},
+				x: []float32{1, 1, 1, 1},
+				k: 1,
+			},
+			wantResult: SearchResult{
+				Shard: Shard{
+					IndexName: "test_1",
+					ShardId:   1,
+				},
+				Error:   config.ErrWrongInputDimension,
+				Result:  nil,
+				ToRoute: false,
+			},
+			wantErr: true,
+		},
+		{
+			name:   "mock_not_found",
+			fields: mockIndexManagerField(3),
+			args: args{
+				ctx: nil,
+				shard: Shard{
+					IndexName: "test_not_found",
+					ShardId:   1,
+				},
+				x: []float32{1, 1, 1, 1},
+				k: 1,
+			},
+			wantResult: SearchResult{
+				Shard: Shard{
+					IndexName: "test_not_found",
+					ShardId:   1,
+				},
+				Error:   config.ErrShardNotFound,
+				Result:  nil,
+				ToRoute: false,
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -318,17 +487,17 @@ func TestIndexManager_SearchShard(t *testing.T) {
 }
 
 func TestIndexManager_SyncCluster(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
+	f := mockIndexManagerField(3)
+	i := &IndexManager{
+		engineStore:    f.engineStore,
+		indexManifests: f.indexManifests,
+		pendingShards:  f.pendingShards,
+		listeners:      f.listeners,
+		mode:           Cluster,
+		etcd:           f.etcd,
 	}
-	type args struct {
-		ctx context.Context
-	}
+	i.SyncCluster(context.Background())
+
 	tests := []struct {
 		name   string
 		fields fields
@@ -338,15 +507,7 @@ func TestIndexManager_SyncCluster(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			i := &IndexManager{
-				engineStore:    tt.fields.engineStore,
-				indexManifests: tt.fields.indexManifests,
-				pendingShards:  tt.fields.pendingShards,
-				listeners:      tt.fields.listeners,
-				mode:           tt.fields.mode,
-				etcd:           tt.fields.etcd,
-			}
-			i.SyncCluster(tt.args.ctx)
+
 		})
 	}
 }

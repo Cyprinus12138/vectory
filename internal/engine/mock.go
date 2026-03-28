@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"github.com/Cyprinus12138/vectory/internal/config"
 	"sync"
 )
 
@@ -29,6 +30,9 @@ func newMockIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (*M
 }
 
 func (m *MockIndex) Search(x []float32, k int64) (distances []float32, labels []string, err error) {
+	if len(x) != m.InputDim() {
+		return nil, nil, config.ErrWrongInputDimension
+	}
 	return []float32{0.5, 0.5, 0.5}, []string{"1", "2", "3"}, nil
 }
 

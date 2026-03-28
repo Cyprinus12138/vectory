@@ -70,15 +70,15 @@ func (f *FaissIndex) Search(x []float32, k int64) (distances []float32, labels [
 	f.rw.RLock()
 	defer f.rw.RUnlock()
 
-	if err = f.CheckAvailable(); err != nil {
-		return nil, nil, err
+	// Inline nil and dim checks to avoid re-acquiring RLock (nested RLock deadlocks
+	// when a writer is waiting on the same mutex).
+	if f.index == nil {
+		return nil, nil, config.ErrNilIndex
 	}
-
 	if len(x) == 0 {
 		return nil, nil, config.ErrEmptyInput
 	}
-
-	if len(x) < f.InputDim() {
+	if len(x) < f.index.D() {
 		return nil, nil, config.ErrWrongInputDimension
 	}
 
@@ -141,12 +141,10 @@ func (f *FaissIndex) Revision() int64 {
 }
 
 func (f *FaissIndex) Reload(ctx context.Context) error {
-	if f.reloading.Load() {
+	if !f.reloading.CompareAndSwap(false, true) {
 		logger.CtxError(ctx, "index is reloading", logger.Interface("index", f.manifest.Meta))
 		return config.ErrAlreadyReloading
 	}
-
-	f.reloading.Store(true)
 	defer f.reloading.Store(false)
 
 	source := f.manifest.Source

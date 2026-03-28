@@ -3,12 +3,8 @@ package grpc_handler
 import (
 	"context"
 	"github.com/Cyprinus12138/vectory/internal/processor"
-	"github.com/Cyprinus12138/vectory/internal/utils/func_builder"
-	"github.com/Cyprinus12138/vectory/internal/utils/monitor"
 	pb "github.com/Cyprinus12138/vectory/proto/gen/go"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type CoreService struct {
@@ -46,10 +42,4 @@ func (s *CoreService) GetIndexStat(ctx context.Context, request *pb.GetIndexStat
 func (s *CoreService) GetIndexMeta(ctx context.Context, request *pb.GetIndexMetaRequest) (*pb.GetIndexMetaResponse, error) {
 	//TODO implement me
 	panic("implement me")
-}
-
-func (s *CoreService) SayHello(ctx context.Context, req *pb.HelloRequest) (resp *pb.HelloReply, err error) {
-	defer func_builder.BuildReportFunc(monitor.RpcReq)(ctx, "SayHello", "handler", &err)()
-
-	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
 }

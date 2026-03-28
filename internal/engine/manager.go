@@ -273,6 +273,8 @@ func (i *IndexManager) unmarkShardPending(ctx context.Context, shard Shard) {
 
 }
 
+// Search perform searching on all shards of a entire index, call SearchShard if the shard exist locally or return empty
+// result with ToRoute flag.
 func (i *IndexManager) Search(ctx context.Context, indexName string, x []float32, k int64) (result []SearchResult, err error) {
 	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("indexName", indexName))
 
@@ -306,6 +308,7 @@ func (i *IndexManager) Search(ctx context.Context, indexName string, x []float32
 	return result, nil
 }
 
+// SearchShard search on a local specific shard, will return error of not exist locally.
 func (i *IndexManager) SearchShard(ctx context.Context, shard Shard, x []float32, k int64) (result SearchResult, err error) {
 	log := logger.DefaultLoggerWithCtx(ctx).With(logger.String("shard", shard.ShardKey()))
 
@@ -448,7 +451,10 @@ func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
 		if !ok {
 			return true
 		}
-		if clusterManager.NeedLoad(shard.ShardKey()) {
+		// Clear shards that were reassigned away from this node so they no longer
+		// keep the node in Unhealthy status. Shards still owned by this node are
+		// left pending and will be retried in the load loop below.
+		if !clusterManager.NeedLoad(shard.ShardKey()) {
 			i.unmarkShardPending(ctx, shard)
 			deletedShard += 1
 		}
@@ -458,30 +464,50 @@ func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
 	i.indexManifests.Range(func(key, value any) bool {
 		manifest, _ := value.(*IndexManifest)
 
-		shards := manifest.GenerateShards()
-		for _, shard := range shards {
-			needLoad := clusterManager.NeedLoad(shard.ShardKey())
-			val, loaded := i.engineStore.Load(shard.UniqueShardKey())
+		// Iterate unique shards (without replica dimension) so that each logical
+		// shard is evaluated exactly once. Using GenerateShards (shard×replica)
+		// caused the same UniqueShardKey to be loaded for one replica and then
+		// immediately deleted when the loop reached a different replica of the
+		// same shard that hashed to a different node.
+		uniqueShards := manifest.GenerateUniqueShards()
+		for _, uShard := range uniqueShards {
+			val, loaded := i.engineStore.Load(uShard.UniqueShardKey())
+
+			// A unique shard belongs to this node if any of its replica keys
+			// hashes to this node on the ring.
+			var needLoad bool
+			var assignedShard Shard
+			for replicaId := int32(0); replicaId < manifest.Meta.Replicas; replicaId++ {
+				candidate := Shard{IndexName: uShard.IndexName, ShardId: uShard.ShardId, ReplicaId: replicaId}
+				if clusterManager.NeedLoad(candidate.ShardKey()) {
+					needLoad = true
+					assignedShard = candidate
+					break
+				}
+			}
+
 			if needLoad && !loaded {
 				totalShard += 1
-				index, err := NewIndex(ctx, manifest, shard)
+				index, err := NewIndex(ctx, manifest, assignedShard)
 				if err != nil {
 					log.Error(
 						"init index shard failed",
 						logger.Err(err),
-						logger.String("shardKey", shard.ShardKey()),
+						logger.String("shardKey", assignedShard.ShardKey()),
 					)
-					i.markShardPending(ctx, shard)
+					i.markShardPending(ctx, uShard)
 					continue
 				}
-				i.engineStore.Store(shard.UniqueShardKey(), index)
+				i.engineStore.Store(uShard.UniqueShardKey(), index)
 				successShard += 1
 			}
 			if !needLoad && loaded {
 				deletedShard += 1
+				// Remove from map before freeing memory so that concurrent
+				// SearchShard calls cannot dereference the freed FAISS index.
+				i.engineStore.Delete(uShard.UniqueShardKey())
 				index, _ := val.(Index)
 				index.Delete()
-				i.engineStore.Delete(shard.UniqueShardKey())
 			}
 		}
 		return true
