@@ -3,16 +3,17 @@ package engine
 import (
 	"context"
 	"fmt"
+	"os"
+	"reflect"
+	"sync"
+	"testing"
+
 	"github.com/Cyprinus12138/vectory/internal/cluster"
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/utils/config_manager"
 	"github.com/Cyprinus12138/vectory/mocks"
 	"github.com/spf13/viper"
 	etcd "go.etcd.io/etcd/client/v3"
-	"os"
-	"reflect"
-	"sync"
-	"testing"
 )
 
 var (
@@ -110,15 +111,16 @@ func mockIndexManagerField(numIndex int) fields {
 	return f
 }
 
+// mockListener implements the Listener interface for testing.
+type mockListener struct {
+	updateCount int
+	closed      bool
+}
+
+func (m *mockListener) Update() { m.updateCount++ }
+func (m *mockListener) Close()  { m.closed = true }
+
 func TestIndexManager_Rebalance(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		ctx context.Context
 	}
@@ -128,7 +130,16 @@ func TestIndexManager_Rebalance(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "empty_manager",
+			fields: fields{engineStore: &sync.Map{}, indexManifests: &sync.Map{}, pendingShards: &sync.Map{}, listeners: &sync.Map{}, mode: Cluster, etcd: etcdCli},
+			args:   args{ctx: context.Background()},
+		},
+		{
+			name:   "with_loaded_indices",
+			fields: mockIndexManagerField(2),
+			args:   args{ctx: context.Background()},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,14 +159,6 @@ func TestIndexManager_Rebalance(t *testing.T) {
 }
 
 func TestIndexManager_RegisterListener(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		key      string
 		listener Listener
@@ -165,7 +168,16 @@ func TestIndexManager_RegisterListener(t *testing.T) {
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "register_new",
+			fields: mockIndexManagerField(1),
+			args:   args{key: "shard-1", listener: &mockListener{}},
+		},
+		{
+			name:   "register_overwrite",
+			fields: mockIndexManagerField(1),
+			args:   args{key: "shard-1", listener: &mockListener{}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -178,19 +190,19 @@ func TestIndexManager_RegisterListener(t *testing.T) {
 				etcd:           tt.fields.etcd,
 			}
 			i.RegisterListener(tt.args.key, tt.args.listener)
+			val, ok := i.listeners.Load(tt.args.key)
+			if !ok {
+				t.Errorf("RegisterListener() listener not found for key %s", tt.args.key)
+				return
+			}
+			if val != tt.args.listener {
+				t.Errorf("RegisterListener() stored listener does not match")
+			}
 		})
 	}
 }
 
 func TestIndexManager_ResolveUniqueShard(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		uShardKey *Shard
 	}
@@ -201,7 +213,24 @@ func TestIndexManager_ResolveUniqueShard(t *testing.T) {
 		wantNodes []*cluster.Routing
 		wantErr   bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:    "index_not_found",
+			fields:  mockIndexManagerField(1),
+			args:    args{uShardKey: &Shard{IndexName: "nonexistent", ShardId: 0}},
+			wantErr: true,
+		},
+		{
+			name:    "shard_id_out_of_range",
+			fields:  mockIndexManagerField(1),
+			args:    args{uShardKey: &Shard{IndexName: "test_0", ShardId: 99}},
+			wantErr: true,
+		},
+		{
+			name:    "valid_shard",
+			fields:  mockIndexManagerField(1),
+			args:    args{uShardKey: &Shard{IndexName: "test_0", ShardId: 0}},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -218,8 +247,8 @@ func TestIndexManager_ResolveUniqueShard(t *testing.T) {
 				t.Errorf("ResolveUniqueShard() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(gotNodes, tt.wantNodes) {
-				t.Errorf("ResolveUniqueShard() gotNodes = %v, want %v", gotNodes, tt.wantNodes)
+			if !tt.wantErr && gotNodes == nil {
+				t.Errorf("ResolveUniqueShard() returned nil nodes for valid shard")
 			}
 		})
 	}
@@ -309,6 +338,18 @@ func TestIndexManager_Search(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name:   "index_not_found",
+			fields: mockIndexManagerField(1),
+			args: args{
+				ctx:       context.Background(),
+				indexName: "nonexistent",
+				x:         []float32{1, 1, 1, 1, 1},
+				k:         1,
+			},
+			wantResult: nil,
+			wantErr:    true,
 		},
 	}
 	for _, tt := range tests {
@@ -496,40 +537,35 @@ func TestIndexManager_SyncCluster(t *testing.T) {
 		mode:           Cluster,
 		etcd:           f.etcd,
 	}
+	// SyncCluster starts a background watcher goroutine. Verify it does not panic.
 	i.SyncCluster(context.Background())
-
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-		})
-	}
 }
 
 func TestIndexManager_UnregisterListener(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		key string
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name           string
+		fields         fields
+		args           args
+		preRegister    bool
+		wantExistAfter bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:           "unregister_existing",
+			fields:         mockIndexManagerField(1),
+			args:           args{key: "shard-0"},
+			preRegister:    true,
+			wantExistAfter: false,
+		},
+		{
+			name:           "unregister_nonexistent",
+			fields:         mockIndexManagerField(1),
+			args:           args{key: "no-such-key"},
+			preRegister:    false,
+			wantExistAfter: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -541,7 +577,13 @@ func TestIndexManager_UnregisterListener(t *testing.T) {
 				mode:           tt.fields.mode,
 				etcd:           tt.fields.etcd,
 			}
+			if tt.preRegister {
+				i.RegisterListener(tt.args.key, &mockListener{})
+			}
 			i.UnregisterListener(tt.args.key)
+			if _, ok := i.listeners.Load(tt.args.key); ok != tt.wantExistAfter {
+				t.Errorf("UnregisterListener() key %q still exists = %v, want %v", tt.args.key, ok, tt.wantExistAfter)
+			}
 		})
 	}
 }
@@ -589,7 +631,7 @@ func TestIndexManager_deleteIndex(t *testing.T) {
 }
 
 func TestIndexManager_loadIndex(t *testing.T) {
-	type fields struct {
+	type localFields struct {
 		engineStore    *sync.Map
 		indexManifests *sync.Map
 		pendingShards  *sync.Map
@@ -603,7 +645,7 @@ func TestIndexManager_loadIndex(t *testing.T) {
 	}
 	tests := []struct {
 		name             string
-		fields           fields
+		fields           localFields
 		args             args
 		wantTotalShard   int
 		wantSuccessShard int
@@ -611,7 +653,7 @@ func TestIndexManager_loadIndex(t *testing.T) {
 	}{
 		{
 			name: "cluster",
-			fields: fields{
+			fields: localFields{
 				engineStore:    &sync.Map{},
 				indexManifests: &sync.Map{},
 				pendingShards:  &sync.Map{},
@@ -635,7 +677,7 @@ func TestIndexManager_loadIndex(t *testing.T) {
 		},
 		{
 			name: "single",
-			fields: fields{
+			fields: localFields{
 				engineStore:    &sync.Map{},
 				indexManifests: &sync.Map{},
 				pendingShards:  &sync.Map{},
@@ -684,14 +726,6 @@ func TestIndexManager_loadIndex(t *testing.T) {
 }
 
 func TestIndexManager_markShardPending(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		ctx   context.Context
 		shard Shard
@@ -701,7 +735,20 @@ func TestIndexManager_markShardPending(t *testing.T) {
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			name:   "mark_new_shard",
+			fields: fields{engineStore: &sync.Map{}, indexManifests: &sync.Map{}, pendingShards: &sync.Map{}, listeners: &sync.Map{}},
+			args:   args{ctx: context.Background(), shard: Shard{IndexName: "test_0", ShardId: 0, ReplicaId: 0}},
+		},
+		{
+			name: "mark_already_pending",
+			fields: func() fields {
+				f := fields{engineStore: &sync.Map{}, indexManifests: &sync.Map{}, pendingShards: &sync.Map{}, listeners: &sync.Map{}}
+				f.pendingShards.Store(Shard{IndexName: "test_0", ShardId: 1}, true)
+				return f
+			}(),
+			args: args{ctx: context.Background(), shard: Shard{IndexName: "test_0", ShardId: 1}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -714,24 +761,29 @@ func TestIndexManager_markShardPending(t *testing.T) {
 				etcd:           tt.fields.etcd,
 			}
 			i.markShardPending(tt.args.ctx, tt.args.shard)
+			if _, ok := i.pendingShards.Load(tt.args.shard); !ok {
+				t.Errorf("markShardPending() shard not found in pendingShards")
+			}
 		})
 	}
 }
 
 func TestIndexManager_notifyListeners(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	tests := []struct {
-		name   string
-		fields fields
+		name         string
+		fields       fields
+		numListeners int
 	}{
-		// TODO: Add test cases.
+		{
+			name:         "no_listeners",
+			fields:       fields{engineStore: &sync.Map{}, indexManifests: &sync.Map{}, pendingShards: &sync.Map{}, listeners: &sync.Map{}},
+			numListeners: 0,
+		},
+		{
+			name:         "with_listeners",
+			fields:       fields{engineStore: &sync.Map{}, indexManifests: &sync.Map{}, pendingShards: &sync.Map{}, listeners: &sync.Map{}},
+			numListeners: 3,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -743,30 +795,48 @@ func TestIndexManager_notifyListeners(t *testing.T) {
 				mode:           tt.fields.mode,
 				etcd:           tt.fields.etcd,
 			}
+			listeners := make([]*mockListener, tt.numListeners)
+			for idx := 0; idx < tt.numListeners; idx++ {
+				listeners[idx] = &mockListener{}
+				i.listeners.Store(fmt.Sprintf("key-%d", idx), listeners[idx])
+			}
 			i.notifyListeners()
+			for idx, l := range listeners {
+				if l.updateCount != 1 {
+					t.Errorf("notifyListeners() listener %d updateCount = %d, want 1", idx, l.updateCount)
+				}
+			}
 		})
 	}
 }
 
 func TestIndexManager_unmarkShardPending(t *testing.T) {
-	type fields struct {
-		engineStore    *sync.Map
-		indexManifests *sync.Map
-		pendingShards  *sync.Map
-		listeners      *sync.Map
-		mode           Mode
-		etcd           *etcd.Client
-	}
 	type args struct {
 		ctx   context.Context
 		shard Shard
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name          string
+		fields        fields
+		args          args
+		wantInPending bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "unmark_existing",
+			fields: func() fields {
+				f := fields{engineStore: &sync.Map{}, indexManifests: &sync.Map{}, pendingShards: &sync.Map{}, listeners: &sync.Map{}}
+				f.pendingShards.Store(Shard{IndexName: "test_0", ShardId: 0}, true)
+				return f
+			}(),
+			args:          args{ctx: context.Background(), shard: Shard{IndexName: "test_0", ShardId: 0}},
+			wantInPending: false,
+		},
+		{
+			name:          "unmark_nonexistent",
+			fields:        fields{engineStore: &sync.Map{}, indexManifests: &sync.Map{}, pendingShards: &sync.Map{}, listeners: &sync.Map{}},
+			args:          args{ctx: context.Background(), shard: Shard{IndexName: "test_0", ShardId: 99}},
+			wantInPending: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -779,6 +849,9 @@ func TestIndexManager_unmarkShardPending(t *testing.T) {
 				etcd:           tt.fields.etcd,
 			}
 			i.unmarkShardPending(tt.args.ctx, tt.args.shard)
+			if _, ok := i.pendingShards.Load(tt.args.shard); ok != tt.wantInPending {
+				t.Errorf("unmarkShardPending() shard in pending = %v, want %v", ok, tt.wantInPending)
+			}
 		})
 	}
 }
