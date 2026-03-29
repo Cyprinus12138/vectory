@@ -3,29 +3,64 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"sync"
+	"sync/atomic"
+
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/DataIntelligenceCrew/go-faiss"
 	"github.com/pkg/errors"
 	"github.com/robfig/cron/v3"
-	"strconv"
-	"sync"
-	"sync/atomic"
 )
+
+// FaissIndexHandle abstracts the subset of faiss.Index methods used by FaissIndex,
+// allowing unit tests to inject a mock without the FAISS C library.
+type FaissIndexHandle interface {
+	D() int
+	Ntotal() int64
+	MetricType() int
+	Search(x []float32, k int64) ([]float32, []int64, error)
+	Delete()
+}
+
+// readIndexFunc reads a FAISS index from disk. Defaults to faiss.ReadIndex.
+type readIndexFunc func(filename string, ioflags int) (FaissIndexHandle, error)
+
+// newDownloaderFunc creates a Downloader. Defaults to NewDownLoader.
+type newDownloaderFunc func(ctx context.Context, source *IndexSource, shard Shard) (Downloader, error)
 
 type FaissIndex struct {
 	rw          *sync.RWMutex
-	index       faiss.Index
+	index       FaissIndexHandle
 	reloading   *atomic.Bool
 	reloadEntry cron.EntryID
 	shard       Shard
 	revision    int64
 
-	manifest *IndexManifest
+	manifest      *IndexManifest
+	readIndexFn   readIndexFunc
+	newDownloadFn newDownloaderFunc
+}
+
+// defaultReadIndex wraps faiss.ReadIndex to match the readIndexFunc signature.
+func defaultReadIndex(filename string, ioflags int) (FaissIndexHandle, error) {
+	return faiss.ReadIndex(filename, ioflags)
 }
 
 func newFaissIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (*FaissIndex, error) {
-	dl, err := NewDownLoader(ctx, manifest.Source, shard)
+	reloading := &atomic.Bool{}
+	reloading.Store(false)
+	index := &FaissIndex{
+		rw:            &sync.RWMutex{},
+		reloading:     reloading,
+		shard:         shard,
+		manifest:      manifest,
+		readIndexFn:   defaultReadIndex,
+		newDownloadFn: NewDownLoader,
+	}
+
+	dl, err := index.newDownloadFn(ctx, manifest.Source, shard)
 	if err != nil {
 		logger.CtxError(ctx, "create downloader failed", logger.Err(err), logger.Interface("source", manifest.Source))
 		return nil, err
@@ -37,26 +72,17 @@ func newFaissIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (*
 		return nil, err
 	}
 
-	rawIndex, err := faiss.ReadIndex(localPath, faiss.IOFlagReadOnly)
+	rawIndex, err := index.readIndexFn(localPath, faiss.IOFlagReadOnly)
 	if err != nil {
 		logger.CtxError(ctx, "load index file failed", logger.Err(err), logger.Interface("source", manifest.Source))
 		return nil, err
 	}
 
-	reloading := &atomic.Bool{}
-	reloading.Store(false)
-	index := &FaissIndex{
-		rw:        &sync.RWMutex{},
-		index:     rawIndex,
-		reloading: reloading,
-
-		shard:    shard,
-		revision: revision,
-		manifest: manifest,
-	}
+	index.index = rawIndex
+	index.revision = revision
 
 	if manifest.Reload != nil && manifest.Reload.Enable {
-		err = index.startReload(manifest.Reload) // already check nil.
+		err = index.startReload(manifest.Reload)
 		if err != nil {
 			logger.CtxError(ctx, "load index file failed", logger.Err(err), logger.Interface("source", manifest.Source), logger.Interface("reload", manifest.Reload))
 			return nil, err
@@ -148,7 +174,7 @@ func (f *FaissIndex) Reload(ctx context.Context) error {
 	defer f.reloading.Store(false)
 
 	source := f.manifest.Source
-	dl, err := NewDownLoader(ctx, source, f.shard)
+	dl, err := f.newDownloadFn(ctx, source, f.shard)
 	if err != nil {
 		logger.CtxError(ctx, "create downloader failed", logger.Err(err), logger.Interface("source", source))
 		return err
@@ -162,7 +188,7 @@ func (f *FaissIndex) Reload(ctx context.Context) error {
 		return err
 	}
 
-	rawIndex, err := faiss.ReadIndex(localPath, faiss.IOFlagReadOnly)
+	rawIndex, err := f.readIndexFn(localPath, faiss.IOFlagReadOnly)
 	if err != nil {
 		logger.CtxError(ctx, "load index file failed", logger.Err(err), logger.Interface("source", source))
 		return err

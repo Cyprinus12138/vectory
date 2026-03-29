@@ -6,3 +6,9 @@ build_image:
 
 gen:
 	./scripts/gen.sh
+
+test:
+	go test ./...
+
+setup-faiss:
+	sudo ./scripts/setup_faiss.sh
