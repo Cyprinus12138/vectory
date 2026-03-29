@@ -77,14 +77,11 @@ func TestNewDownLoader_LocalPath(t *testing.T) {
 }
 
 func TestNewDownLoader_Unsupported(t *testing.T) {
-	source := &IndexSource{Type: S3, Location: "s3://bucket"}
+	source := &IndexSource{Type: Hdfs, Location: "hdfs://cluster/path"}
 	shard := Shard{IndexName: "idx", ShardId: 0}
-	dl, err := NewDownLoader(context.Background(), source, shard)
-	if err != nil {
-		t.Fatalf("expected nil error for unsupported type, got %v", err)
-	}
-	if dl != nil {
-		t.Errorf("expected nil downloader for unsupported type, got %v", dl)
+	_, err := NewDownLoader(context.Background(), source, shard)
+	if err == nil {
+		t.Fatal("expected error for unsupported type, got nil")
 	}
 }
 

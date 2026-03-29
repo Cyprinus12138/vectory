@@ -2,6 +2,10 @@ package engine
 
 import (
 	"context"
+	"os"
+	"sync"
+	"sync/atomic"
+
 	"github.com/Cyprinus12138/vectory/internal/cluster"
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/utils"
@@ -11,8 +15,6 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	etcd "go.etcd.io/etcd/client/v3"
-	"os"
-	"sync"
 )
 
 type Mode int
@@ -44,7 +46,7 @@ type IndexManager struct {
 
 var manger *IndexManager
 
-// InitManager TODO load index async.
+// InitManager loads all index manifests and their shards concurrently.
 func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (err error) {
 	manger = &IndexManager{
 		engineStore:    &sync.Map{},
@@ -53,10 +55,18 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 		listeners:      &sync.Map{},
 	}
 	log := logger.DefaultLoggerWithCtx(ctx)
+
 	var (
-		mode                             Mode
-		total, successShard, indexFailed int
+		mode        Mode
+		total       int64
+		successShard int64
+		indexFailed int64
 	)
+
+	// parseManifests collects parsed manifests from the config source (etcd or local files).
+	// Parsing is cheap and sequential; the expensive loadIndex calls are parallelised below.
+	var manifests []*IndexManifest
+
 	if clusterMode {
 		manger.mode = Cluster
 		manger.etcd = etcdCli
@@ -72,23 +82,12 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 		}
 
 		for _, kv := range response.Kvs {
-			log.With(logger.String("manifest_key", string(kv.Key)))
 			manifest := &IndexManifest{}
-
-			err = utils.Unmarshal(kv.Value, manifest)
-			if err != nil {
-				log.Error("unmarshal manifest failed", logger.String("content", string(kv.Value)), logger.Err(err))
+			if err := utils.Unmarshal(kv.Value, manifest); err != nil {
+				log.Error("unmarshal manifest failed", logger.String("key", string(kv.Key)), logger.String("content", string(kv.Value)), logger.Err(err))
 				continue
 			}
-
-			idxTotalShard, idxSuccessShard, err := manger.loadIndex(ctx, manifest)
-			if err != nil {
-				indexFailed += 1
-				log.Error("load index failed", logger.Err(err))
-				continue
-			}
-			total += idxTotalShard
-			successShard += idxSuccessShard
+			manifests = append(manifests, manifest)
 		}
 
 		// Provide a way for cluster manager to trigger the rebalance process.
@@ -107,32 +106,38 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 		}
 
 		for _, file := range indexFiles {
-			log.With(logger.String("manifest_key", file.Name()))
-			var rawCfg []byte
+			rawCfg, err := os.ReadFile(config.GetLocalIndexPath(file.Name()))
+			if err != nil {
+				log.Error("read local manifest file failed", logger.String("file", file.Name()), logger.Err(err))
+				continue
+			}
 
 			manifest := &IndexManifest{}
-			rawCfg, err = os.ReadFile(config.GetLocalIndexPath(file.Name()))
-			if err != nil {
-				log.Error("read local manifest file failed", logger.Err(err))
+			if err := utils.Unmarshal(rawCfg, manifest); err != nil {
+				log.Error("unmarshal manifest failed", logger.String("file", file.Name()), logger.String("content", string(rawCfg)))
 				continue
 			}
-
-			err = utils.Unmarshal(rawCfg, manifest)
-			if err != nil {
-				log.Error("unmarshal manifest failed", logger.String("content", string(rawCfg)))
-				continue
-			}
-
-			idxTotalShard, idxSuccessShard, err := manger.loadIndex(ctx, manifest)
-			if err != nil {
-				indexFailed += 1
-				log.Error("invalid index manifest", logger.Err(err))
-				continue
-			}
-			total += idxTotalShard
-			successShard += idxSuccessShard
+			manifests = append(manifests, manifest)
 		}
 	}
+
+	// Load all manifests concurrently.
+	var wg sync.WaitGroup
+	for _, manifest := range manifests {
+		wg.Add(1)
+		go func(m *IndexManifest) {
+			defer wg.Done()
+			idxTotal, idxSuccess, err := manger.loadIndex(ctx, m)
+			if err != nil {
+				atomic.AddInt64(&indexFailed, 1)
+				log.Error("load index failed", logger.String("index", m.Meta.Name), logger.Err(err))
+				return
+			}
+			atomic.AddInt64(&total, int64(idxTotal))
+			atomic.AddInt64(&successShard, int64(idxSuccess))
+		}(manifest)
+	}
+	wg.Wait()
 
 	manger.SyncCluster(ctx)
 
@@ -140,11 +145,11 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 		return config.ErrNoSuccess
 	}
 	if total > 0 && successShard < total {
-		log.Warn("several shards load failed", logger.Int("total", total), logger.Int("successShard", successShard))
+		log.Warn("several shards load failed", logger.Int64("total", total), logger.Int64("successShard", successShard))
 		return config.ErrPartlySuccess
 	}
 	if indexFailed > 0 {
-		log.Warn("several index parse failed", logger.Int("failedIndex", indexFailed))
+		log.Warn("several index parse failed", logger.Int64("failedIndex", indexFailed))
 		return config.ErrPartlySuccess
 	}
 
