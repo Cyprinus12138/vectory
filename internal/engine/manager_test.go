@@ -91,8 +91,8 @@ func initMockCluster(ctx context.Context, etcdCli *etcd.Client, num int) {
 		panic(err)
 	}
 	cluster.InitEtcdManager(ctx, etcdCli, conf, nodeId)
-	cluster.GetManger().Register(lis)
-	cluster.GetManger().SyncCluster()
+	cluster.GetManager().Register(lis)
+	cluster.GetManager().SyncCluster()
 
 	for i := 0; i < num; i++ {
 		meta := &cluster.NodeMeta{

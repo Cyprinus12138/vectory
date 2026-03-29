@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/Cyprinus12138/vectory/internal/cluster"
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/engine"
@@ -18,10 +23,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"google.golang.org/grpc"
-	"net"
-	"net/http"
-	"os"
-	"time"
 )
 
 type Vectory struct {
@@ -114,7 +115,7 @@ func (a *Vectory) Start() error {
 
 	if a.conf.ClusterMode.Enabled {
 		cluster.InitEtcdManager(a.ctx, a.etcd, a.conf, a.id)
-		manager := cluster.GetManger()
+		manager := cluster.GetManager()
 		err = manager.Register(lis)
 		if err != nil {
 			logger.Error("register node failed", logger.Err(err))
@@ -184,7 +185,7 @@ func (a *Vectory) Stop(sig os.Signal) {
 		// so peers stop routing new requests to it.
 		pkg.SetStatus(pkg.Inactive)
 		logger.Info("unregistering rpc")
-		cluster.GetManger().Unregister()
+		cluster.GetManager().Unregister()
 	}
 
 	if a.conf.GrpcEnabled {

@@ -255,6 +255,22 @@ type Index interface {
 	Shard() *Shard
 }
 
+// StagedReloader is optionally implemented by Index implementations that support
+// two-phase reload (stage then commit) for cluster-wide revision consistency.
+type StagedReloader interface {
+	// StageReload downloads and loads the new revision into memory without serving it.
+	StageReload(ctx context.Context) (revision int64, err error)
+
+	// CommitStaged atomically swaps the staged revision into the serving path.
+	CommitStaged(expectedRevision int64) error
+
+	// DiscardStaged frees any staged data without committing.
+	DiscardStaged()
+
+	// StagedRevision returns the revision of the currently staged data, or 0 if nothing is staged.
+	StagedRevision() int64
+}
+
 func NewIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (Index, error) {
 	logger.CtxInfo(ctx, "loading shard", logger.String("shardKey", shard.ShardKey()))
 	switch manifest.Meta.Type {

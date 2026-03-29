@@ -38,9 +38,15 @@ type FaissIndex struct {
 	shard       Shard
 	revision    int64
 
-	manifest      *IndexManifest
-	readIndexFn   readIndexFunc
-	newDownloadFn newDownloaderFunc
+	// Staged data: loaded into memory but not yet served.
+	stagedIndex    FaissIndexHandle
+	stagedRevision int64
+	stagedMu       sync.Mutex
+
+	manifest       *IndexManifest
+	readIndexFn    readIndexFunc
+	newDownloadFn  newDownloaderFunc
+	reloadCallback func(ctx context.Context) error
 }
 
 // defaultReadIndex wraps faiss.ReadIndex to match the readIndexFunc signature.
@@ -59,6 +65,8 @@ func newFaissIndex(ctx context.Context, manifest *IndexManifest, shard Shard) (*
 		readIndexFn:   defaultReadIndex,
 		newDownloadFn: NewDownLoader,
 	}
+	// Default: immediate swap (single mode). Manager overrides in cluster mode.
+	index.reloadCallback = index.Reload
 
 	dl, err := index.newDownloadFn(ctx, manifest.Source, shard)
 	if err != nil {
@@ -122,6 +130,8 @@ func (f *FaissIndex) Search(x []float32, k int64) (distances []float32, labels [
 }
 
 func (f *FaissIndex) Delete() {
+	f.DiscardStaged()
+
 	f.rw.Lock()
 	defer f.rw.Unlock()
 
@@ -202,6 +212,105 @@ func (f *FaissIndex) Reload(ctx context.Context) error {
 	return nil
 }
 
+func (f *FaissIndex) SetReloadCallback(cb func(ctx context.Context) error) {
+	f.reloadCallback = cb
+}
+
+// StageReload downloads and loads the new revision into staged fields without
+// swapping the serving index. Returns the staged revision.
+func (f *FaissIndex) StageReload(ctx context.Context) (int64, error) {
+	f.stagedMu.Lock()
+	defer f.stagedMu.Unlock()
+
+	if !f.reloading.CompareAndSwap(false, true) {
+		logger.CtxError(ctx, "index is reloading", logger.Interface("index", f.manifest.Meta))
+		return 0, config.ErrAlreadyReloading
+	}
+	defer f.reloading.Store(false)
+
+	source := f.manifest.Source
+	dl, err := f.newDownloadFn(ctx, source, f.shard)
+	if err != nil {
+		logger.CtxError(ctx, "create downloader failed", logger.Err(err), logger.Interface("source", source))
+		return 0, err
+	}
+
+	f.rw.RLock()
+	currentRev := f.revision
+	f.rw.RUnlock()
+
+	localPath, revision, err := dl.DownloadUpdate(currentRev)
+	if err != nil {
+		if !errors.Is(err, config.ErrIndexRevisionUpToDate) {
+			logger.CtxError(ctx, "download index file failed", logger.Err(err), logger.Interface("source", source))
+		}
+		return 0, err
+	}
+
+	rawIndex, err := f.readIndexFn(localPath, faiss.IOFlagReadOnly)
+	if err != nil {
+		logger.CtxError(ctx, "load index file failed", logger.Err(err), logger.Interface("source", source))
+		return 0, err
+	}
+
+	// Discard any previously staged index that was never committed.
+	if f.stagedIndex != nil {
+		f.stagedIndex.Delete()
+	}
+	f.stagedIndex = rawIndex
+	f.stagedRevision = revision
+
+	return revision, nil
+}
+
+// CommitStaged swaps the staged index into the serving path.
+// Returns error if nothing is staged or if the staged revision doesn't match expectedRevision.
+func (f *FaissIndex) CommitStaged(expectedRevision int64) error {
+	f.stagedMu.Lock()
+	defer f.stagedMu.Unlock()
+
+	if f.stagedIndex == nil {
+		return fmt.Errorf("nothing staged for shard %s", f.shard.ShardKey())
+	}
+	if f.stagedRevision != expectedRevision {
+		return fmt.Errorf("staged revision %d != expected %d for shard %s", f.stagedRevision, expectedRevision, f.shard.ShardKey())
+	}
+
+	f.rw.Lock()
+	old := f.index
+	f.index = f.stagedIndex
+	f.revision = f.stagedRevision
+	f.stagedIndex = nil
+	f.stagedRevision = 0
+	f.rw.Unlock()
+
+	// Free the old index outside the write lock.
+	if old != nil {
+		old.Delete()
+	}
+	return nil
+}
+
+// DiscardStaged frees any staged index without committing.
+func (f *FaissIndex) DiscardStaged() {
+	f.stagedMu.Lock()
+	defer f.stagedMu.Unlock()
+
+	if f.stagedIndex != nil {
+		f.stagedIndex.Delete()
+		f.stagedIndex = nil
+		f.stagedRevision = 0
+	}
+}
+
+// StagedRevision returns the revision of the currently staged data, or 0 if nothing is staged.
+func (f *FaissIndex) StagedRevision() int64 {
+	f.stagedMu.Lock()
+	defer f.stagedMu.Unlock()
+
+	return f.stagedRevision
+}
+
 func (f *FaissIndex) Meta() IndexMeta {
 	return f.manifest.Meta
 }
@@ -229,7 +338,7 @@ func (f *FaissIndex) startReload(setting *ReloadSetting) (err error) {
 		}
 
 		f.reloadEntry, err = GetScheduler().AddFunc(cronStr, func() {
-			err := f.Reload(context.Background())
+			err := f.reloadCallback(context.Background())
 			if err != nil {
 				logger.Error("reload failed", logger.Err(err))
 				return

@@ -3,14 +3,15 @@ package cluster
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"sync"
+	"time"
+
 	"github.com/Cyprinus12138/vectory/internal/config"
 	"github.com/Cyprinus12138/vectory/internal/utils/logger"
 	"github.com/Cyprinus12138/vectory/pkg"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	etcd "go.etcd.io/etcd/client/v3"
-	"net"
-	"sync"
-	"time"
 
 	"github.com/serialx/hashring"
 	"github.com/shirou/gopsutil/cpu"
@@ -85,7 +86,7 @@ func InitEtcdManager(ctx context.Context, e *etcd.Client, conf *config.ClusterMe
 	}
 }
 
-func GetManger() *EtcdManager {
+func GetManager() *EtcdManager {
 	return manager
 }
 
@@ -447,4 +448,27 @@ func (e *EtcdManager) Route(ctx context.Context, key string) (routing *Routing, 
 
 func (e *EtcdManager) SetRebalanceHook(f func(ctx context.Context) error) {
 	e.rebalanceHook = f
+}
+
+func (e *EtcdManager) NodeId() string {
+	return e.nodeId
+}
+
+func (e *EtcdManager) KeepAliveLeaseID() etcd.LeaseID {
+	return e.keepaliveLease.ID
+}
+
+// GetOwnerNode returns the node ID that the hash ring assigns for the given key.
+func (e *EtcdManager) GetOwnerNode(key string) string {
+	e.hashRingMu.RLock()
+	defer e.hashRingMu.RUnlock()
+
+	if e.clusterHashRing == nil {
+		return ""
+	}
+	node, ok := e.clusterHashRing.GetNode(key)
+	if !ok {
+		return ""
+	}
+	return node
 }

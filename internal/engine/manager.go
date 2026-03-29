@@ -2,7 +2,10 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -44,6 +47,11 @@ type IndexManager struct {
 	etcd *etcd.Client
 }
 
+// revisionReady is the JSON payload written to etcd ready/commit keys.
+type revisionReady struct {
+	Revision int64 `json:"revision"`
+}
+
 var manger *IndexManager
 
 // InitManager loads all index manifests and their shards concurrently.
@@ -57,10 +65,10 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 	log := logger.DefaultLoggerWithCtx(ctx)
 
 	var (
-		mode        Mode
-		total       int64
+		mode         Mode
+		total        int64
 		successShard int64
-		indexFailed int64
+		indexFailed  int64
 	)
 
 	// parseManifests collects parsed manifests from the config source (etcd or local files).
@@ -91,7 +99,7 @@ func InitManager(ctx context.Context, clusterMode bool, etcdCli *etcd.Client) (e
 		}
 
 		// Provide a way for cluster manager to trigger the rebalance process.
-		cluster.GetManger().SetRebalanceHook(manger.Rebalance)
+		cluster.GetManager().SetRebalanceHook(manger.Rebalance)
 	} else {
 		manger.mode = Single
 		indexFiles, err := os.ReadDir(config.GetLocalIndexRootPath())
@@ -180,7 +188,7 @@ func (i *IndexManager) loadIndex(ctx context.Context, manifest *IndexManifest) (
 
 	var clusterManger *cluster.EtcdManager
 	if i.mode == Cluster {
-		clusterManger = cluster.GetManger()
+		clusterManger = cluster.GetManager()
 		if clusterManger == nil {
 			log.Error("clusterManager is nil!")
 			return 0, 0, config.ErrClusterNotInitialised
@@ -213,6 +221,12 @@ func (i *IndexManager) loadIndex(ctx context.Context, manifest *IndexManifest) (
 			i.markShardPending(ctx, shard)
 			continue
 		}
+
+		// In cluster mode, override the reload callback to stage instead of swap.
+		if i.mode == Cluster {
+			i.setClusterReloadCallback(index, manifest.Meta.Name)
+		}
+
 		i.engineStore.Store(shard.UniqueShardKey(), index)
 		successShard += 1
 	}
@@ -367,6 +381,8 @@ func (i *IndexManager) SyncCluster(ctx context.Context) {
 		return
 	}
 
+	i.watchCommits(ctx)
+
 	go func(ctx context.Context) {
 		log := logger.DefaultLoggerWithCtx(ctx)
 		watch := i.etcd.Watch(ctx, config.GetIndexManifestPathPrefix(), etcd.WithPrefix())
@@ -449,7 +465,7 @@ func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
 		}
 	}(&err)
 
-	clusterManager := cluster.GetManger()
+	clusterManager := cluster.GetManager()
 
 	i.pendingShards.Range(func(key, value any) bool {
 		shard, ok := key.(Shard)
@@ -503,6 +519,9 @@ func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
 					i.markShardPending(ctx, uShard)
 					continue
 				}
+				if i.mode == Cluster {
+					i.setClusterReloadCallback(index, manifest.Meta.Name)
+				}
 				i.engineStore.Store(uShard.UniqueShardKey(), index)
 				successShard += 1
 			}
@@ -512,7 +531,7 @@ func (i *IndexManager) Rebalance(ctx context.Context) (err error) {
 				// SearchShard calls cannot dereference the freed FAISS index.
 				i.engineStore.Delete(uShard.UniqueShardKey())
 				index, _ := val.(Index)
-				index.Delete()
+				index.Delete() // Delete() already calls DiscardStaged() internally.
 			}
 		}
 		return true
@@ -559,7 +578,7 @@ func (i *IndexManager) ResolveUniqueShard(uShardKey *Shard) (nodes []*cluster.Ro
 		return nil, config.ErrResolveIndexShard
 	}
 
-	clusterManager := cluster.GetManger()
+	clusterManager := cluster.GetManager()
 	replicas := uShardKey.GenerateReplicaKeys(int(manifest.Meta.Replicas))
 	for _, replica := range replicas {
 		routing, err := clusterManager.Route(context.Background(), replica)
@@ -570,6 +589,254 @@ func (i *IndexManager) ResolveUniqueShard(uShardKey *Shard) (nodes []*cluster.Ro
 		nodes = append(nodes, routing)
 	}
 	return nodes, err
+}
+
+// setClusterReloadCallback overrides the reload callback on a FaissIndex so that
+// cron-triggered reloads stage instead of swap, then signal readiness via etcd.
+func (i *IndexManager) setClusterReloadCallback(index Index, indexName string) {
+	fi, ok := index.(*FaissIndex)
+	if !ok {
+		return
+	}
+	fi.SetReloadCallback(func(ctx context.Context) error {
+		sr, ok := index.(StagedReloader)
+		if !ok {
+			return fi.Reload(ctx) // fallback
+		}
+		rev, err := sr.StageReload(ctx)
+		if err != nil {
+			return err
+		}
+		return i.signalReady(ctx, indexName, rev)
+	})
+}
+
+// nodesOwningIndex returns the set of node IDs that own at least one shard of the given index.
+func (i *IndexManager) nodesOwningIndex(indexName string) map[string]bool {
+	val, ok := i.indexManifests.Load(indexName)
+	if !ok {
+		return nil
+	}
+	manifest := val.(*IndexManifest)
+	cm := cluster.GetManager()
+	if cm == nil {
+		return nil
+	}
+
+	owners := make(map[string]bool)
+	for _, shard := range manifest.GenerateShards() {
+		nodeId := cm.GetOwnerNode(shard.ShardKey())
+		if nodeId != "" {
+			owners[nodeId] = true
+		}
+	}
+	return owners
+}
+
+// signalReady checks if all local shards of the given index are staged at the same revision,
+// and if so, writes the ready key to etcd and attempts to trigger a commit.
+func (i *IndexManager) signalReady(ctx context.Context, indexName string, revision int64) error {
+	log := logger.DefaultLoggerWithCtx(ctx).With(
+		logger.String("indexName", indexName),
+		logger.Int64("revision", revision),
+	)
+
+	// Check that ALL local shards of this index are staged at the same revision.
+	val, ok := i.indexManifests.Load(indexName)
+	if !ok {
+		return fmt.Errorf("index %s not found in manifests", indexName)
+	}
+	manifest := val.(*IndexManifest)
+
+	for _, uShard := range manifest.GenerateUniqueShards() {
+		raw, loaded := i.engineStore.Load(uShard.UniqueShardKey())
+		if !loaded {
+			continue // shard not on this node
+		}
+		sr, ok := raw.(StagedReloader)
+		if !ok {
+			continue
+		}
+		if sr.StagedRevision() != revision {
+			// Not all local shards staged yet; wait for the remaining cron callbacks.
+			log.Debug("not all local shards staged yet",
+				logger.String("shardKey", uShard.UniqueShardKey()),
+				logger.Int64("stagedRevision", sr.StagedRevision()),
+			)
+			return nil
+		}
+	}
+
+	// All local shards staged — write ready key to etcd.
+	cm := cluster.GetManager()
+	readyKey := config.GetRevisionReadyPath(indexName, cm.NodeId())
+	payload, _ := json.Marshal(revisionReady{Revision: revision})
+	_, err := i.etcd.Put(ctx, readyKey, string(payload), etcd.WithLease(cm.KeepAliveLeaseID()))
+	if err != nil {
+		log.Error("failed to write ready key", logger.Err(err))
+		return fmt.Errorf("write ready key: %w", err)
+	}
+	log.Info("signaled revision ready")
+
+	return i.checkAndCommit(ctx, indexName, revision)
+}
+
+// checkAndCommit reads all ready keys for the index and, if every owning node agrees
+// on the same revision, writes the commit key to trigger cluster-wide activation.
+func (i *IndexManager) checkAndCommit(ctx context.Context, indexName string, revision int64) error {
+	log := logger.DefaultLoggerWithCtx(ctx).With(
+		logger.String("indexName", indexName),
+		logger.Int64("revision", revision),
+	)
+
+	owners := i.nodesOwningIndex(indexName)
+	if len(owners) == 0 {
+		return nil
+	}
+
+	readyPrefix := config.GetRevisionReadyPathPrefix(indexName)
+	resp, err := i.etcd.Get(ctx, readyPrefix, etcd.WithPrefix())
+	if err != nil {
+		log.Error("failed to read ready keys", logger.Err(err))
+		return fmt.Errorf("read ready keys: %w", err)
+	}
+
+	readyNodes := make(map[string]int64)
+	for _, kv := range resp.Kvs {
+		var r revisionReady
+		if err := json.Unmarshal(kv.Value, &r); err != nil {
+			continue
+		}
+		// Extract nodeId from key: .../ready/{nodeId}
+		parts := strings.Split(string(kv.Key), "/")
+		if len(parts) > 0 {
+			nodeId := parts[len(parts)-1]
+			readyNodes[nodeId] = r.Revision
+		}
+	}
+
+	// Check that every owning node is ready at the target revision.
+	for nodeId := range owners {
+		rev, ok := readyNodes[nodeId]
+		if !ok || rev != revision {
+			log.Debug("not all nodes ready",
+				logger.String("waitingFor", nodeId),
+			)
+			return nil
+		}
+	}
+
+	// All nodes ready — write commit key.
+	commitKey := config.GetRevisionCommitPath(indexName)
+	payload, _ := json.Marshal(revisionReady{Revision: revision})
+	_, err = i.etcd.Put(ctx, commitKey, string(payload))
+	if err != nil {
+		log.Error("failed to write commit key", logger.Err(err))
+		return fmt.Errorf("write commit key: %w", err)
+	}
+	log.Info("all nodes ready, commit key written")
+
+	return nil
+}
+
+// commitIndex activates the staged revision on all local shards of the given index.
+func (i *IndexManager) commitIndex(ctx context.Context, indexName string, revision int64) {
+	log := logger.DefaultLoggerWithCtx(ctx).With(
+		logger.String("indexName", indexName),
+		logger.Int64("revision", revision),
+	)
+
+	val, ok := i.indexManifests.Load(indexName)
+	if !ok {
+		return
+	}
+	manifest := val.(*IndexManifest)
+
+	for _, uShard := range manifest.GenerateUniqueShards() {
+		raw, loaded := i.engineStore.Load(uShard.UniqueShardKey())
+		if !loaded {
+			continue
+		}
+		sr, ok := raw.(StagedReloader)
+		if !ok {
+			continue
+		}
+		if err := sr.CommitStaged(revision); err != nil {
+			log.Error("commit staged failed",
+				logger.String("shardKey", uShard.UniqueShardKey()),
+				logger.Err(err),
+			)
+			continue
+		}
+		log.Info("committed staged revision", logger.String("shardKey", uShard.UniqueShardKey()))
+	}
+
+	// Cleanup: delete this node's ready key.
+	cm := cluster.GetManager()
+	if cm != nil {
+		readyKey := config.GetRevisionReadyPath(indexName, cm.NodeId())
+		_, _ = i.etcd.Delete(ctx, readyKey)
+	}
+}
+
+// watchCommits watches the revision commit prefix in etcd and triggers local commits.
+func (i *IndexManager) watchCommits(ctx context.Context) {
+	go func() {
+		log := logger.DefaultLoggerWithCtx(ctx)
+		commitPrefix := config.GetRevisionCommitPathPrefix()
+		watch := i.etcd.Watch(ctx, commitPrefix, etcd.WithPrefix())
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case watchResp := <-watch:
+				if watchResp.Canceled {
+					logger.Fatal("watch revision commits canceled", logger.Err(watchResp.Err()))
+					return
+				}
+				for _, event := range watchResp.Events {
+					if event.Type == mvccpb.DELETE {
+						continue
+					}
+					// Parse indexName from key: {root}/revision/{indexName}/commit
+					key := string(event.Kv.Key)
+					indexName := i.parseIndexNameFromCommitKey(key)
+					if indexName == "" {
+						log.Warn("could not parse index name from commit key", logger.String("key", key))
+						continue
+					}
+
+					var r revisionReady
+					if err := json.Unmarshal(event.Kv.Value, &r); err != nil {
+						log.Error("unmarshal commit value failed", logger.String("key", key), logger.Err(err))
+						continue
+					}
+
+					log.Info("received commit signal",
+						logger.String("indexName", indexName),
+						logger.Int64("revision", r.Revision),
+					)
+					i.commitIndex(ctx, indexName, r.Revision)
+				}
+			}
+		}
+	}()
+}
+
+// parseIndexNameFromCommitKey extracts the index name from a commit key.
+// Key format: {root}/revision/{indexName}/commit
+func (i *IndexManager) parseIndexNameFromCommitKey(key string) string {
+	prefix := config.GetRevisionCommitPathPrefix()
+	if !strings.HasPrefix(key, prefix) {
+		return ""
+	}
+	// After prefix: /{indexName}/commit
+	remainder := strings.TrimPrefix(key, prefix+"/")
+	parts := strings.SplitN(remainder, "/", 2)
+	if len(parts) < 2 || parts[1] != "commit" {
+		return ""
+	}
+	return parts[0]
 }
 
 // notifyListeners will trigger a ResolverNow action immediately for all existing resolvers (aka Listener here).
